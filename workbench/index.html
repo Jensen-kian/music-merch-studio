@@ -919,7 +919,21 @@ html:not([data-theme="dark"]) .song-maker-replace:hover{color:#fffdf6;border-bot
 .side-album img{width:56px;height:56px}
 .side-album .cnt{display:block;margin-top:2px;color:#98a0b3;font-size:10px}
 .side-album b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.side-total{padding:8px 0 2px;color:#98a0b3;font-size:10px}
+/* 标题行：标题+张数在左，排序按钮在右（对照网易云手机端专辑页） */
+.side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px;border-bottom:1px solid #ddd}
+.side-head .side-title{padding-bottom:0;border-bottom:0;display:flex;align-items:baseline;gap:7px;min-width:0}
+.side-total{color:#98a0b3;font-size:10px;font-weight:400;white-space:nowrap}
+.side-sort{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:#5b6472;cursor:pointer}
+.side-sort:hover{background:#eef1f6;color:#2672b1}
+.side-sort svg{width:15px;height:15px}
+/* 排序弹层：三个选项，当前项带 ✓（对照网易云的排序面板） */
+.side-sort-pop{flex:none;margin-top:6px;padding:4px;border:1px solid #e2e6ee;border-radius:8px;background:#fff;box-shadow:0 10px 26px -14px rgba(30,45,80,.35)}
+.side-sort-pop button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:#333;font:11px Inter,"Microsoft YaHei",sans-serif;cursor:pointer;text-align:left;white-space:nowrap}
+.side-sort-pop button:hover{background:#f2f5fa}
+.side-sort-pop button.on{color:#c20c0c}
+.side-sort-pop button svg{width:13px;height:13px;flex:none}
+.side-sort-pop button i{display:none;margin-left:auto;font-style:normal;color:#c20c0c;font-weight:700}
+.side-sort-pop button.on i{display:block}
 </style>
 </head>
 <body data-page-node-id="Na2JkVOieEwQ90ny6oba1N">
@@ -1425,6 +1439,13 @@ const SHOP_TAG   = {};       // 变体键 -> 展示名
 let ARTIST_BASE_DATA  = null; // 最近一次歌手查询的原始 data（未混入专辑/全量歌曲）
 let ARTIST_SONGS_FULL = false;// 「载入全部歌曲」是否生效中
 let ARTIST_BASE_SONGS = [];   // 载入全部歌曲前的热门列表（返回用）
+let SIDE_SORT_MODE = 'date';  // 侧栏专辑排序：date=发行时间 / hot=热度（接口原序）/ type=类型
+
+/* 排序弹层：点按钮/选项以外的地方就收起（document 级只挂一次）。 */
+document.addEventListener('click', e => {
+  const pop = $('#sideSortPop');
+  if (pop && !pop.hidden && !pop.contains(e.target)) pop.hidden = true;
+});
 
 /* 黑胶画布宽（高 = 宽×2）。档位是白名单，后端也会再收敛一次。 */
 let VINYL_W = 1200;
@@ -1611,7 +1632,7 @@ function renderArtistResultStage(data){
   const rows=songs.map((track,i)=>`<tr class="artist-track" data-track="${i}"><td class="no">${i+1}</td><td>${esc(track.name||'—')}</td>${isSongSearch?`<td>${esc(track.artist||'—')}</td>`:''}<td>${esc(track.album||track.artist||'—')}</td><td class="duration">${esc(track.dur||'')}</td><td class="make"><button type="button" data-track="${i}">制作</button></td></tr>`).join('');
   const albumRows=albums.map((album,i)=>`<div class="side-album" data-album="${i}"><img src="${esc(asset(album.pic||''))}" alt=""><span><b>${esc(album.name||'未命名专辑')}</b><small>${esc([album.date,album.type].filter(Boolean).join(' · ')||'专辑')}</small>${album.tracks?`<span class="cnt">${album.tracks} 首</span>`:''}</span></div>`).join('');
   box.className='albStage music-search-stage';
-  box.innerHTML=`<div class="music-page${albCtx?' no-side':''}"><section class="music-page__main"><div class="artist-info">${pic?`<img class="artist-info__cover" src="${esc(pic)}" alt="${esc(albCtx?albCtx.name:(artist.name||''))}">`:'<div class="artist-info__cover"></div>'}<div class="artist-info__copy">${albCtx?`<span class="artist-info__tag">专辑</span><h2>${esc(albCtx.name||'未命名专辑')}</h2><div class="artist-info__meta">${esc(artist.name||ARTIST_Q||'')}${albCtx.date?'　·　'+esc(albCtx.date):''}${albCtx.type?'　·　'+esc(albCtx.type):''}${albCtx.company?'　·　'+esc(albCtx.company):''}　·　共 ${songs.length} 首</div><div class="artist-info__actions"><button type="button" class="primary" id="albumMakeDesign">生成整张专辑设计</button></div>`:`<span class="artist-info__tag">歌手</span><h2>${esc(artist.name||ARTIST_Q||'搜索结果')}</h2><div class="artist-info__meta">热门单曲 ${songs.length} 首　·　专辑 ${ALBUM_LIST.length||data.albumCount||0} 张　·　来源 ${data.source==='qq'?'QQ音乐':data.source==='kugou'?'酷狗音乐':'网易云音乐'}</div><div class="artist-info__actions"><button type="button" class="primary" id="artistMakeHot">按热门生成</button><button type="button" id="artistBrowseAlbums">查看全部专辑</button></div>`}</div></div><div class="artist-summary"><b>音乐资料</b>从这里挑选一首单曲或一张专辑，再交给右侧的商品制作队列。封面、曲名和歌手信息会继续传入现有生成流程。</div><div class="track-head"><h3>${albCtx?'专辑曲目':(ARTIST_SONGS_FULL?'全部歌曲':'热门歌曲')}</h3><span>${songs.length} 首</span>${albCtx?'':`<button type="button" id="artistSongMode">${ARTIST_SONGS_FULL?'← 返回热门歌曲':'载入该歌手全部歌曲 →'}</button>`}</div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5">暂无歌曲数据</td></tr>'}</tbody></table></section>${albCtx?'':`<aside class="music-page__side"><div class="side-title">相关专辑</div><div class="side-total">共 ${albums.length||ALBUM_LIST.length||0} 张 · 滚动查看</div><div class="side-scroll">${albumRows||'<p class="search-popover__empty">暂无专辑数据</p>'}</div>${ALBUM_LIST.length?'<button class="side-more" id="artistSideMore" type="button">网格视图查看全部 →</button>':''}</aside>`}</div>`;
+  box.innerHTML=`<div class="music-page${albCtx?' no-side':''}"><section class="music-page__main"><div class="artist-info">${pic?`<img class="artist-info__cover" src="${esc(pic)}" alt="${esc(albCtx?albCtx.name:(artist.name||''))}">`:'<div class="artist-info__cover"></div>'}<div class="artist-info__copy">${albCtx?`<span class="artist-info__tag">专辑</span><h2>${esc(albCtx.name||'未命名专辑')}</h2><div class="artist-info__meta">${esc(artist.name||ARTIST_Q||'')}${albCtx.date?'　·　'+esc(albCtx.date):''}${albCtx.type?'　·　'+esc(albCtx.type):''}${albCtx.company?'　·　'+esc(albCtx.company):''}　·　共 ${songs.length} 首</div><div class="artist-info__actions"><button type="button" class="primary" id="albumMakeDesign">生成整张专辑设计</button></div>`:`<span class="artist-info__tag">歌手</span><h2>${esc(artist.name||ARTIST_Q||'搜索结果')}</h2><div class="artist-info__meta">热门单曲 ${songs.length} 首　·　专辑 ${ALBUM_LIST.length||data.albumCount||0} 张　·　来源 ${data.source==='qq'?'QQ音乐':data.source==='kugou'?'酷狗音乐':'网易云音乐'}</div><div class="artist-info__actions"><button type="button" class="primary" id="artistMakeHot">按热门生成</button><button type="button" id="artistBrowseAlbums">查看全部专辑</button></div>`}</div></div><div class="artist-summary"><b>音乐资料</b>从这里挑选一首单曲或一张专辑，再交给右侧的商品制作队列。封面、曲名和歌手信息会继续传入现有生成流程。</div><div class="track-head"><h3>${albCtx?'专辑曲目':(ARTIST_SONGS_FULL?'全部歌曲':'热门歌曲')}</h3><span>${songs.length} 首</span>${albCtx?'':`<button type="button" id="artistSongMode">${ARTIST_SONGS_FULL?'← 返回热门歌曲':'载入该歌手全部歌曲 →'}</button>`}</div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5">暂无歌曲数据</td></tr>'}</tbody></table></section>${albCtx?'':`<aside class="music-page__side"><div class="side-head"><div class="side-title">相关专辑<span class="side-total">共 ${albums.length||ALBUM_LIST.length||0} 张</span></div><button class="side-sort" id="sideSortBtn" type="button" title="排序方式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6h8M3.5 12h6M3.5 18h4.5M17 4.5v15M14.7 6.8 17 4.5l2.3 2.3M14.7 17.2 17 19.5l2.3-2.3"/></svg></button></div><div class="side-sort-pop" id="sideSortPop" hidden><button type="button" data-sort="date" class="${SIDE_SORT_MODE==='date'?'on':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>按发行时间排序<i>✓</i></button><button type="button" data-sort="hot" class="${SIDE_SORT_MODE==='hot'?'on':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c1.2 2.6 4.5 4.6 4.5 8.3a4.5 4.5 0 0 1-9 0c0-1.7.8-2.9 1.7-4.1.5.9 1.1 1.4 1.8 1.6-.4-2 .1-4.1 1-5.8z"/></svg>按热度排序<i>✓</i></button><button type="button" data-sort="type" class="${SIDE_SORT_MODE==='type'?'on':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.5V6.5l9-2v11"/><circle cx="6.8" cy="18.5" r="2.2"/><circle cx="15.8" cy="15.5" r="2.2"/></svg>按类型排序<i>✓</i></button></div><div class="side-scroll" id="sideScroll">${albumRows||'<p class="search-popover__empty">暂无专辑数据</p>'}</div>${ALBUM_LIST.length?'<button class="side-more" id="artistSideMore" type="button">网格视图查看全部 →</button>':''}</aside>`}</div>`;
   const chooseSong=async i=>{
    if(isSongSearch){
      box.innerHTML=`<div class="music-page song-search-page"><section class="music-page__main"><div class="song-search-heading"><span class="artist-info__tag">单曲搜索</span><h2>“${esc(data.query||'')}”的搜索结果</h2><p>${data.searchError?`搜索失败：${esc(data.searchError)}。请稍后重试。`:`找到 ${songs.length} 首候选歌曲。请核对歌手和专辑，再选择要制作的版本。`}</p></div><div class="track-head"><h3>歌曲列表</h3><span>${songs.length} 首</span></div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>歌手</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6">没有找到匹配的歌曲，可换个歌名或歌手重试。</td></tr>'}</tbody></table></section></div>`;
@@ -1707,7 +1728,32 @@ function renderArtistResultStage(data){
   };
   const mkDesign=$('#albumMakeDesign');
   if(mkDesign) mkDesign.onclick=()=>openStudio(albumParams(albCtx));
-  box.querySelectorAll('.side-album').forEach(row=>row.addEventListener('click',()=>{const album=albums[Number(row.dataset.album)];if(album)openAlbumDetail(album);}));
+  /* 侧栏专辑排序（对照网易云手机端）：
+     date=按发行时间降序；hot=接口原序（hotAlbums 本身就是热度序）；type=类型分组后组内按时间降序 */
+  const sideDateKey=v=>{const m=String(v||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})?/);return m?(+m[1])*10000+(+m[2])*100+(+(m[3]||1)):0;};
+  const TYPE_PRI=t=>/^专辑|Album/i.test(t||'')?0:/EP/i.test(t||'')?1:/Single|单曲/i.test(t||'')?2:3;
+  const sortAlbums=list=>{const arr=list.slice();
+    if(SIDE_SORT_MODE==='date')arr.sort((a,b)=>sideDateKey(b.date)-sideDateKey(a.date));
+    else if(SIDE_SORT_MODE==='type')arr.sort((a,b)=>TYPE_PRI(a.type)-TYPE_PRI(b.type)||sideDateKey(b.date)-sideDateKey(a.date));
+    return arr;}; /* hot：不排序，保持 hotAlbums 原序 */
+  const fillSide=()=>{
+    const list=sortAlbums(albums);
+    const sc=$('#sideScroll'); if(!sc)return;
+    sc.innerHTML=list.length?list.map((al,i)=>`<div class="side-album" data-album="${i}"><img src="${esc(asset(al.pic||''))}" alt=""><span><b>${esc(al.name||'未命名专辑')}</b><small>${esc([al.date,al.type].filter(Boolean).join(' · ')||'专辑')}</small>${al.tracks?`<span class="cnt">${al.tracks} 首</span>`:''}</span></div>`).join(''):'<p class="search-popover__empty">暂无专辑数据</p>';
+    sc.querySelectorAll('.side-album').forEach(row=>row.addEventListener('click',()=>{const al=list[Number(row.dataset.album)];if(al)openAlbumDetail(al);}));
+  };
+  fillSide();
+  const sBtn=$('#sideSortBtn'),sPop=$('#sideSortPop');
+  if(sBtn&&sPop){
+    sBtn.onclick=e=>{e.stopPropagation();sPop.hidden=!sPop.hidden;};
+    sPop.querySelectorAll('button').forEach(b=>b.onclick=e=>{
+      e.stopPropagation();
+      SIDE_SORT_MODE=b.dataset.sort;
+      sPop.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+      sBtn.title='当前：'+b.textContent.replace('✓','').trim();
+      fillSide();sPop.hidden=true;
+    });
+  }
 }
 
 /* ===== 专辑详情页：侧栏点专辑 → 先看这张专辑的全部曲目，再决定做哪首 ===== */
