@@ -97,7 +97,8 @@ from design_service import SERVICE as DESIGN  # noqa: E402
 import design_service as DSDESIGN  # noqa: E402
 
 from fetch163 import (  # noqa: E402
-    API, cover_url, download, get_json, resolve_picurl, safe_name, search,
+    API, artist_top_songs, album_songs, cover_url, download, get_json,
+    resolve_picurl, safe_name, search,
 )
 from fetch_qq import (  # noqa: E402
     MAX_COVER as QQ_MAX_COVER, comment_total_q, cover_url_q,
@@ -2489,6 +2490,64 @@ class Handler(BaseHTTPRequestHandler):
                 albums = multi_search_albums(name)
                 return self._json({"query": name, "songs": songs,
                                    "artists": artists, "albums": albums})
+
+            if p == "/api/album_songs":
+                # 专辑详情页：一张专辑的全部曲目（有多少给多少）。
+                # 侧栏点专辑 → 先看曲目清单再决定做哪首/整张设计。
+                aid = (q.get("id") or [""])[0].strip()
+                if not aid.isdigit():
+                    return self._json({"error": "缺少专辑 id"}, 400)
+                try:
+                    info, songs = album_songs(int(aid))
+                except Exception as e:
+                    slog("WARN", f"album_songs/{aid}: {type(e).__name__}: {e}")
+                    return self._json({"error": f"专辑曲目查询失败：{type(e).__name__}"}, 502)
+                if not songs:
+                    return self._json({"error": "这张专辑没有可用曲目"}, 404)
+                return self._json({
+                    "album": {
+                        "id": info["id"], "name": info["name"],
+                        "pic": cover_url(info["pic"], 1200),
+                        "date": info["date"], "company": info["company"],
+                        "type": info["type"], "count": len(songs),
+                    },
+                    "songs": [{
+                        "id": s["id"], "name": s["name"], "no": s["no"],
+                        "artist": s["artists"], "album": s["album"],
+                        "dur": fmt_dur(s["dur_ms"]),
+                        "pic": cover_url(s["pic"], 800), "source": "163",
+                    } for s in songs],
+                })
+
+            if p == "/api/artist_songs":
+                # 歌手全部歌曲（网易云 hotSongs，最多 50 首）。
+                # 歌手页「载入全部歌曲」按钮用 —— 热门表默认只给 18 首。
+                name = (q.get("name") or [""])[0].strip()
+                if not name:
+                    return self._json({"error": "缺少歌手名"}, 400)
+                try:
+                    res = search(name, "artist", 5)
+                    ars = res.get("artists") or []
+                except Exception as e:
+                    return self._json({"error": f"歌手解析失败：{type(e).__name__}"}, 502)
+                if not ars:
+                    return self._json({"error": f"网易云没找到歌手「{name}」"}, 404)
+                ar = ars[0]
+                try:
+                    songs = artist_top_songs(ar["id"], 50)
+                except Exception as e:
+                    slog("WARN", f"artist_songs/{name}: {type(e).__name__}: {e}")
+                    return self._json({"error": "歌曲列表查询失败"}, 502)
+                return self._json({
+                    "artist": {"id": ar.get("id"), "name": ar.get("name"),
+                               "pic": cover_url(ar.get("img1v1Url") or "", 300)},
+                    "songs": [{
+                        "id": s["id"], "name": s["name"],
+                        "artist": s["artists"], "album": s["album"],
+                        "dur": fmt_dur(s["dur_ms"]),
+                        "pic": cover_url(s["pic"], 800), "source": "163",
+                    } for s in songs],
+                })
 
             if p == "/api/state":
                 jid = (q.get("id") or [""])[0]
