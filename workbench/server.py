@@ -1912,11 +1912,76 @@ def multi_search_albums(name):
     return out[:12]
 
 
+def _tracklist_pool(raw):
+    """专辑详情页「勾选批量制作」：前端送来的曲目整包 → render_song 可用的池。
+
+    前端行数据是 /api/album_songs 的形状（artist 字符串、dur 是 mm:ss 文本），
+    这里统一收敛成内部规范（artists 字符串、dur_ms 毫秒数），缺时长的按 0 处理。
+    """
+    pool = []
+    for s in raw if isinstance(raw, list) else []:
+        if not isinstance(s, dict):
+            continue
+        name = (s.get("name") or "").strip()
+        if not name:
+            continue
+        dur_ms = s.get("dur_ms")
+        if not dur_ms:
+            parts = [p for p in str(s.get("dur") or "").strip().split(":") if p != ""]
+            try:
+                if len(parts) == 2:
+                    dur_ms = (int(parts[0]) * 60 + int(parts[1])) * 1000
+                elif len(parts) == 3:
+                    dur_ms = (int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])) * 1000
+            except Exception:
+                dur_ms = 0
+        pool.append({
+            "id": s.get("id"),
+            "name": name,
+            "no": s.get("no") or 0,
+            "dur_ms": int(dur_ms or 0),
+            "artists": s.get("artists") or s.get("artist") or "",
+            "album": s.get("album") or "",
+            "pic": s.get("pic") or "",
+            "source": s.get("source") or "",
+        })
+    return pool
+
+
 def run_artist(job, opt):
     artist = (opt.get("artist") or "").strip()
     want = int(opt["top"])
     mode = opt.get("source", "auto") or "auto"
     log(job, f"搜索歌手：{artist}")
+
+    # 勾选批量制作（专辑详情页复选框）：曲目已由前端定死，跳过搜索直接逐首制作。
+    if isinstance(opt.get("trackList"), list) and opt["trackList"]:
+        pool = _tracklist_pool(opt["trackList"])
+        if not pool:
+            return fail(job, "勾选的曲目没有可用数据")
+        src_used = (pool[0].get("source") or "").strip() \
+                   or opt.get("trackSource") or "163"
+        opt["_src"] = src_used
+        name = artist or (pool[0].get("artists") or "").split("/")[0].strip() or "勾选曲目"
+        job["title"] = f"{name} · 勾选{len(pool)}首"
+        log(job, f"勾选批量制作：{len(pool)} 首（使用前端勾选结果，不再搜索）")
+        job["total"] = len(pool)
+
+        rank = 0
+        for s in pool:
+            job["phase"] = f"第 {rank + 1}/{len(pool)} 首"
+            item, why = render_song(job, s, rank + 1, opt)
+            if item is None:
+                log(job, f"跳过「{s['name']}」：{why}", "warn")
+                job["skipped"].append(f"{s['name']}（{why}）")
+                continue
+            rank += 1
+            job["items"].append(item)
+            job["done"] = rank
+            time.sleep(0.2)
+        if rank == 0:
+            return fail(job, "勾选的曲目都没有可用封面")
+        return finish(job, job["items"], name, f"勾选{len(job['items'])}首", src_used)
 
     src_used, ar, pool, notes = pick_source(artist, mode, want + 25)
     for nt in notes:
@@ -2729,7 +2794,8 @@ class Handler(BaseHTTPRequestHandler):
                 opt = dict(DEFAULTS)
                 for k, v in req.items():
                     if k in DEFAULTS or k in ("artist", "song", "pick", "songId",
-                                              "songSource", "albummid", "coverUpload", "selectedSong"):
+                                              "songSource", "albummid", "coverUpload", "selectedSong",
+                                              "trackList"):
                         opt[k] = v
                 # 类型收敛, 防止前端传字符串把算术搞崩
                 for k in ("top", "width", "dpi", "pick", "duration"):
