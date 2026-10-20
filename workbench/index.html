@@ -1589,7 +1589,7 @@ function renderArtistResultStage(data){
   const rows=songs.map((track,i)=>`<tr class="artist-track" data-track="${i}"><td class="no">${i+1}</td><td>${esc(track.name||'—')}</td>${isSongSearch?`<td>${esc(track.artist||'—')}</td>`:''}<td>${esc(track.album||track.artist||'—')}</td><td class="duration">${esc(track.dur||'')}</td><td class="make"><button type="button" data-track="${i}">制作</button></td></tr>`).join('');
   const albumRows=albums.map((album,i)=>`<div class="side-album" data-album="${i}"><img src="${esc(asset(album.pic||''))}" alt=""><span><b>${esc(album.name||'未命名专辑')}</b><small>${esc([album.date,album.type].filter(Boolean).join(' · ')||'专辑')}</small></span></div>`).join('');
   box.className='albStage music-search-stage';
-  box.innerHTML=`<div class="music-page"><section class="music-page__main"><div class="artist-info">${pic?`<img class="artist-info__cover" src="${esc(pic)}" alt="${esc(artist.name||'')}">`:'<div class="artist-info__cover"></div>'}<div class="artist-info__copy"><span class="artist-info__tag">歌手</span><h2>${esc(artist.name||ARTIST_Q||'搜索结果')}</h2><div class="artist-info__meta">热门单曲 ${songs.length} 首　·　专辑 ${ALBUM_LIST.length||data.albumCount||0} 张　·　来源 ${data.source==='qq'?'QQ音乐':'网易云音乐'}</div><div class="artist-info__actions"><button type="button" class="primary" id="artistMakeHot">按热门生成</button><button type="button" id="artistBrowseAlbums">查看全部专辑</button></div></div></div><div class="artist-summary"><b>音乐资料</b>从这里挑选一首单曲或一张专辑，再交给右侧的商品制作队列。封面、曲名和歌手信息会继续传入现有生成流程。</div><div class="track-head"><h3>热门歌曲</h3><span>${songs.length} 首</span><button type="button" id="artistSongMode">按关键词搜索更多单曲 →</button></div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5">暂无歌曲数据</td></tr>'}</tbody></table></section><aside class="music-page__side"><div class="side-title">相关专辑</div>${albumRows||'<p class="search-popover__empty">暂无专辑数据</p>'}${ALBUM_LIST.length>albums.length?'<button class="side-more" id="artistSideMore" type="button">查看全部专辑 →</button>':''}</aside></div>`;
+  box.innerHTML=`<div class="music-page"><section class="music-page__main"><div class="artist-info">${pic?`<img class="artist-info__cover" src="${esc(pic)}" alt="${esc(artist.name||'')}">`:'<div class="artist-info__cover"></div>'}<div class="artist-info__copy"><span class="artist-info__tag">歌手</span><h2>${esc(artist.name||ARTIST_Q||'搜索结果')}</h2><div class="artist-info__meta">热门单曲 ${songs.length} 首　·　专辑 ${ALBUM_LIST.length||data.albumCount||0} 张　·　来源 ${data.source==='qq'?'QQ音乐':data.source==='kugou'?'酷狗音乐':'网易云音乐'}</div><div class="artist-info__actions"><button type="button" class="primary" id="artistMakeHot">按热门生成</button><button type="button" id="artistBrowseAlbums">查看全部专辑</button></div></div></div><div class="artist-summary"><b>音乐资料</b>从这里挑选一首单曲或一张专辑，再交给右侧的商品制作队列。封面、曲名和歌手信息会继续传入现有生成流程。</div><div class="track-head"><h3>热门歌曲</h3><span>${songs.length} 首</span><button type="button" id="artistSongMode">按关键词搜索更多单曲 →</button></div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5">暂无歌曲数据</td></tr>'}</tbody></table></section><aside class="music-page__side"><div class="side-title">相关专辑</div>${albumRows||'<p class="search-popover__empty">暂无专辑数据</p>'}${ALBUM_LIST.length>albums.length?'<button class="side-more" id="artistSideMore" type="button">查看全部专辑 →</button>':''}</aside></div>`;
    if(isSongSearch){
      box.innerHTML=`<div class="music-page song-search-page"><section class="music-page__main"><div class="song-search-heading"><span class="artist-info__tag">单曲搜索</span><h2>“${esc(data.query||'')}”的搜索结果</h2><p>${data.searchError?`搜索失败：${esc(data.searchError)}。请稍后重试。`:`找到 ${songs.length} 首候选歌曲。请核对歌手和专辑，再选择要制作的版本。`}</p></div><div class="track-head"><h3>歌曲列表</h3><span>${songs.length} 首</span></div><table class="track-table"><thead><tr><th class="no">#</th><th>歌曲标题</th><th>歌手</th><th>专辑</th><th class="duration">时长</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6">没有找到匹配的歌曲，可换个歌名或歌手重试。</td></tr>'}</tbody></table></section></div>`;
    }
@@ -2130,7 +2130,7 @@ $('#btnQueryArtist').onclick = async ()=>{
     const d = await jget('/api/artist?name='+encodeURIComponent(name)
                          +'&source='+encodeURIComponent(SRC)+'&albums=1');
     const a = d.artist, n = d.songs.length;
-    const srcName = d.source === 'qq' ? 'QQ音乐' : '网易云';
+    const srcName = d.source === 'qq' ? 'QQ音乐' : d.source === 'kugou' ? '酷狗音乐' : '网易云';
     const warn = (d.notes||[]).filter(t=>t.startsWith('⚠'));
     const albs = Array.isArray(d.albumList) ? d.albumList : [];
     const acnt = typeof d.albumCount === 'number' ? d.albumCount : albs.length;
@@ -2297,7 +2297,7 @@ $('#btnQuerySong').onclick = async ()=>{
     const rows = d.songs.map((s,i)=>`
       <div class="srow" data-i="${i}">
         <span class="i">${String(i+1).padStart(2,'0')}</span>
-        <span class="t">${esc(s.name)}${s.source==='qq'?'<em class="src">QQ</em>':''}</span>
+        <span class="t">${esc(s.name)}${s.source==='qq'?'<em class="src">QQ</em>':s.source==='kugou'?'<em class="src">酷狗</em>':''}</span>
         <span class="a">${esc(s.artist)}</span>
         <span class="d">${esc(s.dur)}</span>
       </div>`).join('');
@@ -2386,6 +2386,7 @@ function collect(){
       o.songSource = SEL.source || 'auto';
       if(SEL.albummid) o.albummid = SEL.albummid;
       if(SEL.id) o.songId = SEL.id;
+      if(SEL.source==='kugou' && SEL.albumId) o.kugouAlbumId = SEL.albumId;
       o.selectedSong = {name:SEL.name,artist:SEL.artist,album:SEL.album,dur:SEL.dur,pic:SEL.pic};
       if(SEL.coverUpload) o.coverUpload = SEL.coverUpload;
     }
@@ -3122,7 +3123,7 @@ function libRow(j){
     if(c.shop) bits.push(`商品图 ${c.shop}`);
     if(c.grids) bits.push(`拼版 ${c.grids}`);
   }
-  const srcTag = j.source ? ` · ${j.source === 'qq' ? 'QQ音乐' : '网易云'}` : '';
+  const srcTag = j.source ? ` · ${j.source === 'qq' ? 'QQ音乐' : j.source === 'kugou' ? '酷狗音乐' : '网易云'}` : '';
   const modeTag = mini ? '迷你CD设计'
     : ({artist:'歌手热门', album:'专辑全集', song:'单曲指定', upload:'上传封面'}[j.mode] || j.mode || '');
   // 迷你CD 是同步出件，没有"耗时"这个概念
@@ -3290,6 +3291,25 @@ document.addEventListener('click', e=>{
   function close(){pop.hidden=true;}
   function artist(q){q=(q||'').trim(); if(!q)return; save(q,'artist'); input.value=q; clear.hidden=false; document.body.classList.remove('has-active-production','production-controls-open'); uiMode('artist'); $('#artistName').value=q; $('#btnQueryArtist').click(); close();}
   function song(q){q=(q||'').trim(); if(!q)return; save(q,'song'); input.value=q; clear.hidden=false; document.body.classList.remove('has-active-production','production-controls-open'); uiMode('song'); $('#songKw').value=q; $('#btnQuerySong').click(); close();}
+  /* 回车智能分流：先打统一搜索，看清关键词是歌手还是歌名再路由。
+     · QQ 侧精确命中歌手名 → 直接进歌手页（热门歌曲+专辑）；
+     · 否则只要有单曲候选 → 进单曲候选列表（多平台：QQ/酷狗/网易云）；
+     · 只有余下歌手候选 → 用第一个候选名进歌手页。
+     老后端没有 /api/search 时退回原行为（一律按歌手搜）。 */
+  async function smartSearch(q){
+    q=(q||'').trim(); if(!q)return;
+    save(q); input.value=q; clear.hidden=false;
+    let d=null;
+    try{ d=await jget('/api/search?name='+encodeURIComponent(q),15000); }
+    catch(e){ return artist(q); }
+    const artists=d.artists||[], songs=d.songs||[];
+    const exactQQ=artists.find(a=>a.source==='qq'&&a.name===q);
+    const exactAny=artists.find(a=>a.name===q);
+    if(exactQQ || (exactAny && !songs.length)) return artist((exactQQ||exactAny).name);
+    if(songs.length) return song(q);
+    if(artists.length) return artist(artists[0].name);
+    close(); toast('没找到「'+q+'」相关的歌曲或歌手');
+  }
   function renderStart(){
     const h=history();
     pop.innerHTML=`${h.length?`<div class="search-popover__history"><span>搜索历史</span><button type="button" data-search-clear-history>清空</button></div><div class="search-popover__chips">${h.map(x=>`<button type="button" data-search-${x.mode==='artist'?'artist':'song'}="${escape(x.q)}">${escape(x.q)}</button>`).join('')}</div>`:''}<div class="search-popover__label">猜你想搜</div><div class="search-popover__chips">${hot.map(x=>`<button type="button" data-search-artist="${escape(x)}">${escape(x)}</button>`).join('')}</div><div class="search-popover__label">快速进入</div><div class="search-popover__actions"><button class="search-popover__action" type="button" data-search-mode="artist"><b>按歌手搜索</b><small>热门歌曲和全部专辑</small></button><button class="search-popover__action" type="button" data-search-mode="song"><b>按单曲搜索</b><small>从候选里选一首制作</small></button></div>`;
@@ -3301,7 +3321,7 @@ document.addEventListener('click', e=>{
   }
   input.addEventListener('focus',open);
   input.addEventListener('input',()=>{const q=input.value.trim(); clear.hidden=!q; clearTimeout(timer); if(!q){renderStart();return;} const mine=++token; timer=setTimeout(async()=>{try{const d=await jget('/api/song?name='+encodeURIComponent(q),7000);if(mine===token && !pop.hidden)renderResults(q,d.songs||[])}catch(e){if(mine===token)renderResults(q,[])}},260);});
-  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const q=input.value.trim();if(hot.includes(q))artist(q);else song(q)}else if(e.key==='Escape')close();});
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const q=input.value.trim();if(hot.includes(q))artist(q);else smartSearch(q)}else if(e.key==='Escape')close();});
   clear.addEventListener('click',()=>{input.value='';clear.hidden=true;input.focus();renderStart();});
   pop.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-search-clear-history')){try{localStorage.removeItem('fold-search-history')}catch(err){}renderStart();return;}if(b.dataset.searchArtist!==undefined){artist(b.dataset.searchArtist);return;}if(b.dataset.searchSong!==undefined){song(b.dataset.searchSong);return;}if(b.dataset.searchMode==='artist')artist(input.value);if(b.dataset.searchMode==='song')song(input.value);});
   document.addEventListener('pointerdown',e=>{if(!$('#globalSearchBox').contains(e.target))close();});

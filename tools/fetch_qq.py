@@ -113,18 +113,32 @@ def search_song_musicu(kw, n=10):
     return out
 
 
+_SEARCH_CACHE = {}          # (kw, n) -> (时间戳, 结果)
+_SEARCH_CACHE_TTL = 8.0     # 秒。匿名搜索短时间高频会被静默限流
+                            # （code=0 但 0 条命中），短缓存挡住同一关键词
+                            # 在一秒内被 /api/song 和 /api/search 各打一次。
+
 def search_song(kw, n=10):
+    key = (kw, n)
+    hit = _SEARCH_CACHE.get(key)
+    now = time.time()
+    if hit and now - hit[0] < _SEARCH_CACHE_TTL:
+        return hit[1]
     # 主通道：新版桌面搜索。只要它正常应答（哪怕 0 条），就直接采用——
     # 不能因为 0 条就再去撞旧接口，旧接口现在只会白白多等一个 500。
     try:
-        return search_song_musicu(kw, n)
+        songs = search_song_musicu(kw, n)
+        _SEARCH_CACHE[key] = (now, songs)
+        return songs
     except Exception:
         pass
     # 兜底：旧接口。哪天它恢复了，这条路径仍能工作。
     q = urllib.parse.quote(kw)
     j = _json(f"{SEARCH}?p=1&n={n}&w={q}&format=json"
               "&inCharset=utf8&outCharset=utf-8&platform=yqq")
-    return (((j.get("data") or {}).get("song") or {}).get("list")) or []
+    songs = (((j.get("data") or {}).get("song") or {}).get("list")) or []
+    _SEARCH_CACHE[key] = (now, songs)
+    return songs
 
 
 def search_singer_mid(name):
@@ -133,6 +147,11 @@ def search_singer_mid(name):
     QQ音乐没有好用的「歌手搜索」接口（search_type=1 返回空），
     所以退一步：搜单曲，从结果的 singer 数组里挑与查询名一致的 mid。
     同名歌手用出现频次兜底。
+
+    完全同名的歌手挑不到时（查询其实是歌名/专辑名，比如「范特西」），
+    退而取结果里出现频次最高的歌手 —— 用户搜「范特西」想要的就是
+    周杰伦的歌，这时把《范特西》的演唱者当歌手继续走歌手流程，
+    比直接报「没找到」有用得多。
     """
     name = (name or "").strip()
     known = KNOWN_SINGER_MIDS.get(name)
@@ -152,8 +171,17 @@ def search_singer_mid(name):
             elif name and (name in n or n in name):
                 votes[mid] += 2
     if not votes:
-        return None, ""
-    mid = votes.most_common(1)[0][0]
+        # 没有同名/近名歌手：取结果里出现最多的歌手当候选
+        loose = Counter()
+        for s in songs:
+            for sg in (s.get("singer") or []):
+                if sg.get("mid") and (sg.get("name") or "").strip():
+                    loose[sg["mid"]] += 1
+        if not loose:
+            return None, ""
+        mid = loose.most_common(1)[0][0]
+    else:
+        mid = votes.most_common(1)[0][0]
     # 回查名字
     for s in songs:
         for sg in (s.get("singer") or []):

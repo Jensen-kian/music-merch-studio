@@ -104,6 +104,12 @@ from fetch_qq import (  # noqa: E402
     download as download_q, hot_songs_q, search_singer_mid,
     search_song as search_song_q,
 )
+from fetch_kugou import (  # noqa: E402
+    album_cover_url as kugou_cover_url,
+    search_singer as search_singer_kg,
+    search_song as search_song_kg,
+    singer_hot_songs as hot_songs_kg,
+)
 from make_player import make as make_player  # noqa: E402
 from make_set import (  # noqa: E402
     LEAD_MIN, comment_total, contact_sheet, fmt_dur, hot_songs, hot_songs_ex,
@@ -1139,6 +1145,11 @@ def render_song(job, s, rank, opt):
     elif src == "qq":
         c_url = cover_url_q(s["pic"], QQ_MAX_COVER)      # QQ 源最大 800x800
         got = download_q(c_url, tmp)
+    elif src == "kugou":
+        # 酷狗给的是专辑封面直链（已把 {size} 占位符换成真实尺寸），
+        # 直接下载即可，不能再拼 ?param=（那是网易云 CDN 的参数）。
+        c_url = s.get("pic") or ""
+        got = download_q(c_url, tmp) if c_url else 0
     else:
         # 🔴 请求 2000：网易云 CDN 只能降采样、不能超分，实测母版普遍 1400~2000
         #    （幻听/素颜 = 2000、晴天 1500、Always Online = 1400）。
@@ -1646,7 +1657,7 @@ def pick_source(artist, mode, want):
     """
     src_used, ar, pool, notes = None, None, [], []
     fallback_ar, fallback_pool = None, []
-    if mode not in ("auto", "163", "qq"):
+    if mode not in ("auto", "163", "qq", "kugou"):
         mode = "auto"
 
     if mode in ("auto", "163"):
@@ -1700,7 +1711,152 @@ def pick_source(artist, mode, want):
                 else:
                     notes.append("QQ音乐暂不可用；已拒绝展示网易云混入的合唱／创作歌曲")
 
+    # 酷狗兜底：QQ 和网易云都拿不到池子时（接口限流/歌手只在这边有），再试酷狗。
+    # 注意它必须在 QQ 的「保留网易云主唱匹配」之后 —— 那条路有经过核对的歌曲，
+    # 优先级更高；酷狗是没得选时的第三选择。
+    if not pool and mode in ("auto", "kugou"):
+        try:
+            rows = search_singer_kg(artist, 10)
+            exact = next((r for r in rows if r["name"] == artist), None)
+            row = exact or (rows[0] if rows else None)
+            if row:
+                kg_pool = hot_songs_kg(row["id"], want)
+                if kg_pool:
+                    # 封面懒解析：只解析即将进入制作的条目，避免一次打几十个专辑接口。
+                    for s in kg_pool[:want + 5]:
+                        s["pic"] = kugou_cover_url(s.get("album_id"))
+                    ar = {"id": row["id"], "name": row["name"]}
+                    pool = kg_pool
+                    src_used = "kugou"
+                    if not exact:
+                        notes.append(f"酷狗侧按近似名匹配到歌手「{row['name']}」")
+            if not pool:
+                notes.append("酷狗音乐也没找到可用歌曲")
+        except Exception as e:
+            notes.append(f"⚠ 酷狗接口异常：{type(e).__name__}: {e}")
+
     return src_used, ar, pool or [], notes
+
+
+def multi_search_songs(name, mode="auto"):
+    """单曲多平台聚合搜索：QQ → 酷狗 → 网易云，同名去重，来源打标。
+
+    顺序即优先级：QQ 的版权曲目最全、封面是母版；酷狗补 QQ 限流/缺曲；
+    网易云垫底（缺版权歌手会混入翻唱，但翻唱有时也是用户想要的版本）。
+    /api/song 和 /api/search 共用这一份逻辑。
+    """
+    out, seen = [], set()
+
+    def push(nm, arts, alb, dur, sid, amid, src, pic="", extra=None):
+        key = (nm or "").strip()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        row = {"id": sid, "name": nm, "artist": arts,
+               "album": alb, "dur": dur, "source": src,
+               "albummid": amid,
+               "pic": (cover_url_q(amid) if src == "qq"
+                       else (pic if src == "kugou" else cover_url(pic, 800)))}
+        if extra:
+            row.update(extra)
+        out.append(row)
+
+    # QQ 音乐排前面：版权曲目（周杰伦等）只有这里有，用户多半要点它
+    if mode in ("auto", "qq"):
+        try:
+            for s in search_song_q(name, 15):
+                push(s.get("songname"),
+                     "/".join(x.get("name", "?") for x in (s.get("singer") or [])),
+                     s.get("albumname") or "",
+                     fmt_dur((s.get("interval") or 0) * 1000),
+                     s.get("songid"), s.get("albummid") or "", "qq")
+        except Exception as e:
+            print(f"[qq search] {type(e).__name__}: {e}")
+
+    if mode in ("auto", "kugou"):
+        try:
+            for s in search_song_kg(name, 15):
+                # 酷狗搜索结果没有封面直链，生成时再按 album_id 懒解析，
+                # 不能在这里逐条打专辑接口 —— 联想框每敲一个字都会调到这里。
+                push(s["name"], s["artists"], s["album"],
+                     fmt_dur(s["dur_ms"]), s["id"], "", "kugou", "",
+                     extra={"albumId": s.get("album_id")})
+        except Exception as e:
+            print(f"[kugou search] {type(e).__name__}: {e}")
+
+    if mode in ("auto", "163"):
+        try:
+            res = search(name, "song", 20)
+            for s in (res.get("songs") or [])[:20]:
+                # 网易云搜索接口通常只给 album.picId，需补查详情才有 picUrl。
+                # 不补这一步，直接搜索单曲进入制作页仍会退回音符占位。
+                pic = resolve_picurl(s)
+                arts = "/".join(x.get("name", "?") for x in s.get("artists", []))
+                push(s.get("name"), arts,
+                     (s.get("album") or {}).get("name", ""),
+                     fmt_dur(s.get("duration") or 0),
+                     s.get("id"), "", "163",
+                     pic)
+        except Exception as e:
+            print(f"[163 search] {type(e).__name__}: {e}")
+
+    return out[:30]
+
+
+def multi_search_artists(name, songs=None):
+    """歌手候选：QQ（从单曲结果的 singer 数组投票）→ 酷狗 → 网易云。
+
+    QQ 没有可用的歌手搜索接口，只能从歌曲结果里挑；酷狗有独立歌手搜索；
+    网易云的 artist 搜索补最后一批。同名去重，精确命中排最前。
+    """
+    cands, seen = [], set()
+
+    def add(nm, extra):
+        nm = (nm or "").strip()
+        if not nm or nm in seen:
+            return
+        seen.add(nm)
+        row = {"name": nm}
+        row.update(extra)
+        cands.append(row)
+
+    try:
+        votes = {}
+        for s in search_song_q(name, 15):
+            for sg in (s.get("singer") or []):
+                nm = (sg.get("name") or "").strip()
+                mid = sg.get("mid")
+                if not nm or not mid:
+                    continue
+                v = votes.setdefault(mid, {"name": nm, "w": 0})
+                v["w"] += 10 if nm == name else (2 if (name in nm or nm in name) else 1)
+        for mid, v in sorted(votes.items(), key=lambda kv: -kv[1]["w"])[:5]:
+            add(v["name"], {"source": "qq", "mid": mid})
+    except Exception as e:
+        print(f"[qq artist] {type(e).__name__}: {e}")
+
+    try:
+        kg_rows = search_singer_kg(name, 20)
+        # 酷狗歌手搜索是模糊匹配，会混进大量"XX周杰伦"式蹭名歌手，
+        # 只保留与查询词有包含关系的，避免候选区被垃圾填满。
+        fuzzy = [r for r in kg_rows
+                 if r["name"] == name or name in r["name"] or r["name"] in name]
+        for r in fuzzy[:4]:
+            add(r["name"], {"source": "kugou", "id": r["id"]})
+    except Exception as e:
+        print(f"[kugou artist] {type(e).__name__}: {e}")
+
+    try:
+        res = search(name, "artist", 8)
+        for a in (res.get("artists") or [])[:8]:
+            add(a.get("name"), {"source": "163", "id": a.get("id"),
+                                "pic": cover_url(a.get("img1v1Url") or "", 300)})
+    except Exception as e:
+        print(f"[163 artist] {type(e).__name__}: {e}")
+
+    # 精确命中（用户输的就是歌手名）排最前，其余保持各源顺序
+    cands.sort(key=lambda c: 0 if c["name"] == name else 1)
+    return cands[:8]
 
 
 def run_artist(job, opt):
@@ -1721,7 +1877,7 @@ def run_artist(job, opt):
 
     opt["_src"] = src_used
     name = ar.get("name", artist)
-    src_tag = "QQ音乐" if src_used == "qq" else "网易云"
+    src_tag = {"qq": "QQ音乐", "163": "网易云", "kugou": "酷狗音乐"}.get(src_used, src_used)
     job["title"] = f"{name} · 热门前{want}首"
     log(job, f"歌手 {name}（id={ar.get('id')}）· 数据源 {src_tag}，"
              f"备用池 {len(pool)} 首，目标 {want} 首（无封面自动跳过补位）")
@@ -1779,6 +1935,20 @@ def run_song(job, opt):
             one = {"id": opt["songId"], "name": selected.get("name") or kw,
                    "artists": selected.get("artist") or "", "album": selected.get("album") or "",
                    "pic": selected["pic"], "dur_ms": ms}
+        elif src == "kugou":
+            # 酷狗点选：封面不在搜索结果里（搜索阶段不解析，避免每敲一个字
+            # 就打一串专辑接口），生成时按 album_id 查一次专辑直链。
+            duration = str(selected.get("dur") or "0:00").split(":")
+            try:
+                ms = (int(duration[-2]) * 60 + int(duration[-1])) * 1000
+            except (ValueError, IndexError):
+                ms = 0
+            pic = str(selected.get("pic") or "")
+            if not pic.startswith(("https://", "http://")):
+                pic = kugou_cover_url(opt.get("kugouAlbumId"))
+            one = {"id": opt["songId"], "name": selected.get("name") or kw,
+                   "artists": selected.get("artist") or "", "album": selected.get("album") or "",
+                   "pic": pic, "dur_ms": ms}
         else:
             sid = int(opt["songId"])
             detail = get_json(f"{API}/song/detail/", {"id": sid, "ids": json.dumps([sid])})
@@ -2253,44 +2423,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not name:
                     return self._json({"error": "缺少歌名"}, 400)
                 mode = (q.get("source") or ["auto"])[0]
-                out, seen = [], set()
+                return self._json({"songs": multi_search_songs(name, mode)})
 
-                def push(nm, arts, alb, dur, sid, amid, src, pic=""):
-                    key = (nm or "").strip()
-                    if not key or key in seen:
-                        return
-                    seen.add(key)
-                    out.append({"id": sid, "name": nm, "artist": arts,
-                                "album": alb, "dur": dur, "source": src,
-                                "albummid": amid,
-                                "pic": (cover_url_q(amid) if src == "qq"
-                                        else cover_url(pic, 800))})
-
-                # QQ 音乐排前面：版权曲目（周杰伦等）只有这里有，用户多半要点它
-                if mode in ("auto", "qq"):
-                    try:
-                        for s in search_song_q(name, 15):
-                            push(s.get("songname"),
-                                 "/".join(x.get("name", "?") for x in (s.get("singer") or [])),
-                                 s.get("albumname") or "",
-                                 fmt_dur((s.get("interval") or 0) * 1000),
-                             s.get("songid"), s.get("albummid") or "", "qq")
-                    except Exception as e:
-                        print(f"[qq search] {type(e).__name__}: {e}")
-
-                if mode in ("auto", "163"):
-                    res = search(name, "song", 20)
-                    for s in (res.get("songs") or [])[:20]:
-                        # 网易云搜索接口通常只给 album.picId，需补查详情才有 picUrl。
-                        # 不补这一步，直接搜索单曲进入制作页仍会退回音符占位。
-                        pic = resolve_picurl(s)
-                        arts = "/".join(x.get("name", "?") for x in s.get("artists", []))
-                        push(s.get("name"), arts,
-                             (s.get("album") or {}).get("name", ""),
-                             fmt_dur(s.get("duration") or 0),
-                             s.get("id"), "", "163",
-                             pic)
-                return self._json({"songs": out[:30]})
+            if p == "/api/search":
+                # 统一搜索：单曲（多平台聚合）+ 歌手候选。
+                # 搜索栏回车走这里 —— 关键词既可能是歌名也可能是歌手名，
+                # 一次把两类候选都给前端，由用户点选，不再赌 Enter 的语义。
+                name = (q.get("name") or [""])[0].strip()
+                if not name:
+                    return self._json({"error": "缺少关键词"}, 400)
+                songs = multi_search_songs(name, "auto")
+                artists = multi_search_artists(name, songs)
+                return self._json({"query": name, "songs": songs,
+                                   "artists": artists})
 
             if p == "/api/state":
                 jid = (q.get("id") or [""])[0]
