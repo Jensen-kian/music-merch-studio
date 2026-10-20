@@ -935,6 +935,17 @@ html:not([data-theme="dark"]) .song-maker-replace:hover{color:#fffdf6;border-bot
 .side-sort-pop button svg{width:13px;height:13px;flex:none}
 .side-sort-pop button i{display:none;margin-left:auto;font-style:normal;color:#c20c0c;font-weight:700}
 .side-sort-pop button.on i{display:block}
+/* 右栏 <aside> 会继承应用皮肤的深绿面板（aside{background:#123629}），
+   头部标题/排序图标原本是深色字，在深绿底上几乎隐形——看起来就像没靠左。
+   统一提亮右栏内文字与图标。 */
+.music-page__side .side-head .side-title{color:#f3f1e7}
+.music-page__side .side-total{color:#aebfae}
+.music-page__side .side-sort{color:#d7e0d3}
+.music-page__side .side-sort:hover{background:rgba(255,255,255,.1);color:#fff}
+.music-page__side .side-album b{color:#eef0e4}
+.music-page__side .side-album small{color:#a8b5a5}
+.music-page__side .side-album:hover b{color:#ffffff}
+.music-page__side .side-more{color:#9cc3a6}
 </style>
 </head>
 <body data-page-node-id="Na2JkVOieEwQ90ny6oba1N">
