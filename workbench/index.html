@@ -908,7 +908,10 @@ html:not([data-theme="dark"]) .song-maker-replace:hover{color:#fffdf6;border-bot
 
 .song-search-page{display:block;width:min(1100px,calc(100% - 48px))}.song-search-heading{padding:6px 0 24px;border-bottom:2px solid #c20c0c}.song-search-heading h2{margin:12px 0 7px;font-size:25px;font-weight:600;color:#253a2d}.song-search-heading p{margin:0;color:#6c776e;font-size:12px}.song-search-page .track-head{margin-top:24px}.song-search-page .track-table{margin-top:12px}.song-search-page .track-table td:nth-child(2){color:#253a2d;font-weight:600}@media(max-width:720px){.song-search-page{width:calc(100% - 28px)}.song-search-page .track-table th:nth-child(3),.song-search-page .track-table td:nth-child(3){display:table-cell}.song-search-page .track-table th:nth-child(4),.song-search-page .track-table td:nth-child(4){display:none}}
 /* ===== 歌手页右侧专辑栏：全部专辑 + 滚动；专辑详情页单列 ===== */
-.side-scroll{max-height:calc(100vh - 200px);overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
+/* 侧栏粘性钉在可视区顶部、滚动区弹性填满整列高度——
+   左表再长，往下拉时专辑栏也始终铺满可视高度，不再出现下方空白。 */
+.music-page__side{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;max-height:calc(100vh - 16px)}
+.side-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
 .side-scroll::-webkit-scrollbar{width:6px}
 .side-scroll::-webkit-scrollbar-thumb{background:#d5d9e4;border-radius:3px}
 .side-scroll::-webkit-scrollbar-track{background:transparent}
