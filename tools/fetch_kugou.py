@@ -98,6 +98,36 @@ def search_song(kw, n=15):
     return [_norm_song(s) for s in info if _norm_song(s)["name"]]
 
 
+def search_album(kw, n=8):
+    """搜索专辑。返回统一结构列表。
+
+    专辑搜索接口的 imgurl 直接给封面（带 {size} 占位符），
+    不需要像单曲那样再去 album/info 懒解析。
+    """
+    if not (kw or "").strip():
+        return []
+    q = urllib.parse.quote(kw.strip())
+    j = _j(f"{BASE}/search/album?format=json&keyword={q}"
+           f"&page=1&pagesize={min(max(n, 1), 100)}")
+    info = ((j.get("data") or {}).get("info")) or []
+    out = []
+    for a in info:
+        name = (a.get("albumname") or "").strip()
+        if not name:
+            continue
+        img = (a.get("imgurl") or a.get("sizable_cover") or "")
+        out.append({
+            "source": "kugou",
+            "id": a.get("albumid"),
+            "name": name,
+            "singer": (a.get("singername") or "").strip(),
+            "date": (a.get("publishtime") or "")[:10],
+            "count": a.get("songcount") or 0,
+            "pic": img.replace("{size}", "480") if img else "",
+        })
+    return out
+
+
 def search_singer(kw, n=5):
     """搜索歌手。返回 [{'id': singerid, 'name': singername}, ...]。
 

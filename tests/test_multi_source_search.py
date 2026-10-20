@@ -127,5 +127,48 @@ class KugouFallbackTests(unittest.TestCase):
         self.assertEqual(pool[0]["name"], "温柔")
 
 
+class AlbumSearchTests(unittest.TestCase):
+    """专辑聚合搜索：/api/search 的 albums 字段。"""
+
+    def test_albums_merge_dedup_and_cover(self):
+        qa = [{"albummid": "AM", "albumid": 8217, "albumname": "范特西",
+               "singer": "周杰伦", "date": "2001-09-14", "count": 10}]
+        ka = [{"source": "kugou", "id": 958706, "name": "范特西",
+               "singer": "周杰伦", "date": "2001-11-01", "count": 12,
+               "pic": "http://imge.kugou.com/stdmusic/480/k.jpg"}]
+        with patch.object(server, "search_album_q", return_value=qa), \
+             patch.object(server, "search_album_kg", return_value=ka), \
+             patch.object(server, "search", return_value={"albums": []}):
+            out = server.multi_search_albums("范特西")
+        # 同名同歌手去重：QQ 在前，酷狗不再重复
+        self.assertEqual([a["source"] for a in out], ["qq"])
+        self.assertEqual(out[0]["pic"], "https://y.gtimg.cn/music/photo_new/"
+                                        "T002R800x800M000AM.jpg")
+        self.assertEqual(out[0]["albummid"], "AM")
+
+    def test_albums_survive_source_errors(self):
+        with patch.object(server, "search_album_q", side_effect=RuntimeError("x")), \
+             patch.object(server, "search_album_kg", side_effect=RuntimeError("y")), \
+             patch.object(server, "search", return_value={"albums": [
+                 {"id": 3, "name": "叶惠美", "artist": {"name": "周杰伦"},
+                  "picUrl": "http://p1.music.126.net/x.jpg"}]}):
+            out = server.multi_search_albums("叶惠美")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["source"], "163")
+        self.assertEqual(out[0]["singer"], "周杰伦")
+
+    def test_kugou_search_album_maps_fields(self):
+        with patch.object(fetch_kugou, "_j",
+                          return_value={"data": {"info": [
+                              {"albumid": 958706, "albumname": "范特西",
+                               "singername": "周杰伦", "publishtime": "2001-11-01",
+                               "songcount": 12,
+                               "imgurl": "http://imge.kugou.com/stdmusic/{size}/k.jpg"}]}}):
+            out = fetch_kugou.search_album("范特西")
+        self.assertEqual(out[0]["id"], 958706)
+        self.assertEqual(out[0]["pic"], "http://imge.kugou.com/stdmusic/480/k.jpg")
+        self.assertEqual(out[0]["count"], 12)
+
+
 if __name__ == "__main__":
     unittest.main()

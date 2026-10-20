@@ -101,11 +101,12 @@ from fetch163 import (  # noqa: E402
 )
 from fetch_qq import (  # noqa: E402
     MAX_COVER as QQ_MAX_COVER, comment_total_q, cover_url_q,
-    download as download_q, hot_songs_q, search_singer_mid,
-    search_song as search_song_q,
+    download as download_q, hot_songs_q, search_album_q,
+    search_singer_mid, search_song as search_song_q,
 )
 from fetch_kugou import (  # noqa: E402
     album_cover_url as kugou_cover_url,
+    search_album as search_album_kg,
     search_singer as search_singer_kg,
     search_song as search_song_kg,
     singer_hot_songs as hot_songs_kg,
@@ -1859,6 +1860,57 @@ def multi_search_artists(name, songs=None):
     return cands[:8]
 
 
+def multi_search_albums(name):
+    """专辑多平台聚合搜索：QQ → 酷狗 → 网易云，同名去重，来源打标。
+
+    搜索框提示词写着「搜专辑」，此前实际没有专辑通道；这里补上。
+    封面直接给可访问的直链（QQ 由 albummid 拼 URL，酷狗搜索结果自带，
+    网易云 picUrl 现成），前端联想框可以直接缩略图展示。
+    """
+    key = (name or "").strip()
+    out, seen = [], set()
+
+    def push(nm, singer, src, aid, pic, date="", count=0, extra=None):
+        nm = (nm or "").strip()
+        row_key = (nm, (singer or "").split("/")[0].strip())
+        if not nm or row_key in seen:
+            return
+        seen.add(row_key)
+        row = {"id": aid, "name": nm, "singer": singer or "",
+               "source": src, "pic": pic or "", "date": date,
+               "count": count}
+        if extra:
+            row.update(extra)
+        out.append(row)
+
+    try:
+        for a in search_album_q(key, 8):
+            push(a.get("albumname"), a.get("singer"), "qq",
+                 a.get("albummid"), cover_url_q(a.get("albummid") or ""),
+                 a.get("date") or "", a.get("count") or 0,
+                 extra={"albummid": a.get("albummid") or ""})
+    except Exception as e:
+        print(f"[qq album] {type(e).__name__}: {e}")
+
+    try:
+        for a in search_album_kg(key, 8):
+            push(a["name"], a["singer"], "kugou", a["id"], a["pic"],
+                 a["date"], a["count"])
+    except Exception as e:
+        print(f"[kugou album] {type(e).__name__}: {e}")
+
+    try:
+        res = search(key, "album", 10)
+        for a in (res.get("albums") or [])[:10]:
+            push(a.get("name"), (a.get("artist") or {}).get("name") or "",
+                 "163", a.get("id"), cover_url(a.get("picUrl") or "", 800),
+                 (a.get("publishTime") or "")[:10])
+    except Exception as e:
+        print(f"[163 album] {type(e).__name__}: {e}")
+
+    return out[:12]
+
+
 def run_artist(job, opt):
     artist = (opt.get("artist") or "").strip()
     want = int(opt["top"])
@@ -2426,16 +2478,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"songs": multi_search_songs(name, mode)})
 
             if p == "/api/search":
-                # 统一搜索：单曲（多平台聚合）+ 歌手候选。
-                # 搜索栏回车走这里 —— 关键词既可能是歌名也可能是歌手名，
-                # 一次把两类候选都给前端，由用户点选，不再赌 Enter 的语义。
+                # 统一搜索：单曲（多平台聚合）+ 歌手候选 + 专辑候选。
+                # 搜索栏回车/联想走这里 —— 关键词既可能是歌名、歌手名
+                # 也可能是专辑名，一次把三类候选都给前端，由用户点选。
                 name = (q.get("name") or [""])[0].strip()
                 if not name:
                     return self._json({"error": "缺少关键词"}, 400)
                 songs = multi_search_songs(name, "auto")
                 artists = multi_search_artists(name, songs)
+                albums = multi_search_albums(name)
                 return self._json({"query": name, "songs": songs,
-                                   "artists": artists})
+                                   "artists": artists, "albums": albums})
 
             if p == "/api/state":
                 jid = (q.get("id") or [""])[0]

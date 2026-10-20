@@ -128,7 +128,8 @@ def search_song(kw, n=10):
     # 不能因为 0 条就再去撞旧接口，旧接口现在只会白白多等一个 500。
     try:
         songs = search_song_musicu(kw, n)
-        _SEARCH_CACHE[key] = (now, songs)
+        if songs:
+            _SEARCH_CACHE[key] = (now, songs)
         return songs
     except Exception:
         pass
@@ -139,6 +140,41 @@ def search_song(kw, n=10):
     songs = (((j.get("data") or {}).get("song") or {}).get("list")) or []
     _SEARCH_CACHE[key] = (now, songs)
     return songs
+
+
+def search_album_q(kw, n=8):
+    """搜索专辑（search_type=2，与网页端「专辑」标签同一通道）。
+
+    返回统一字段：albummid/albumid/albumname/singer(字符串)/date/count。
+    一次限流探测时发现 search_type=2 偶发 0 条，隔几秒重试即恢复，
+    所以与 search_song 共用短缓存挡高频。
+    """
+    key = ("album", kw, n)
+    hit = _SEARCH_CACHE.get(key)
+    now = time.time()
+    if hit and now - hit[0] < _SEARCH_CACHE_TTL:
+        return hit[1]
+    payload = {
+        "comm": {"ct": 19, "cv": 1859, "uin": 0},
+        "req": {"method": "DoSearchForQQMusicDesktop",
+                "module": "music.search.SearchCgiService",
+                "param": {"search_type": 2, "query": kw,
+                          "page_num": 1,
+                          "num_per_page": min(max(n, 1), 100)}},
+    }
+    d = (musicu(payload).get("req") or {}).get("data") or {}
+    albums = (((d.get("body") or {}).get("album") or {}).get("list")) or []
+    out = [{
+        "albummid": a.get("albumMID") or "",
+        "albumid": a.get("albumID"),
+        "albumname": a.get("albumName") or "",
+        "singer": a.get("singerName") or "",
+        "date": a.get("publicTime") or "",
+        "count": a.get("song_count") or 0,
+    } for a in albums]
+    if out:                     # 限流瞬间的空结果不缓存，避免把 0 条放大成 8 秒
+        _SEARCH_CACHE[key] = (now, out)
+    return out
 
 
 def search_singer_mid(name):
