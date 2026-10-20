@@ -2678,6 +2678,76 @@ class Handler(BaseHTTPRequestHandler):
                 z = build_zip(d, m.get("title"), (q.get("format") or ["jpg"])[0])
                 return self._file(z, name=f"{m.get('title') or '作品'}.zip")
 
+            if p == "/api/jobs/zip":
+                # 作品库批量下载：把勾选的多条作品合并成一个大 ZIP 一次下走。
+                # 每条先按常规 build_zip 打包（迷你CD 直接用磁盘上现成的 zip），
+                # 再逐个塞进合并包，条目名「序号 标题-id.zip」——同名标题也不互覆。
+                # 全部走临时文件，发完即删，不在 outputs/ 里留垃圾。
+                ids_param = (q.get("ids") or [""])[0]
+                cats_param = (q.get("cats") or [""])[0]
+                fmt = (q.get("format") or ["jpg"])[0]
+                ids = [s for s in (x.strip() for x in ids_param.split(",")) if s]
+                cats = [x.strip() for x in cats_param.split(",")] if cats_param else []
+                if not ids:
+                    return self._json({"error": "缺少 ids"}, 400)
+                if len(ids) > 100:
+                    return self._json({"error": "一次最多打包 100 条"}, 400)
+                items, missing = [], []
+                for i, jid in enumerate(ids):
+                    cat = cats[i] if i < len(cats) and cats[i] else "work"
+                    if cat == CAT_MINI:
+                        zj = _safe_jid(jid)
+                        zp = os.path.join(os.path.realpath(str(DSDESIGN.OUT_DIR)),
+                                          zj + ".zip") if zj else ""
+                        if zp and os.path.isfile(zp):
+                            title = ""
+                            dd = design_dir_of(jid)
+                            if dd:
+                                try:
+                                    with open(os.path.join(dd, "meta.json"),
+                                              encoding="utf-8") as fh:
+                                        mm = json.load(fh)
+                                    title = mm.get("album") or mm.get("title") or ""
+                                except Exception:
+                                    title = ""
+                            items.append((zp, safe_name(title or f"迷你CD设计-{jid}")))
+                        else:
+                            missing.append(jid)
+                        continue
+                    d = jobs_dir_of(jid)
+                    m = load_meta(jid) if d else None
+                    if not d or not m:
+                        missing.append(jid)
+                        continue
+                    zp = build_zip(d, m.get("title"), fmt)
+                    items.append((zp, safe_name(f"{m.get('title') or '作品'}-{jid}")))
+                if not items:
+                    return self._json(
+                        {"error": "勾选的作品都没有可下载的产出："
+                                  + "、".join(missing[:5]) + ("…" if len(missing) > 5 else "")},
+                        404)
+                combined = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "_batch_%s.zip" % uuid.uuid4().hex[:10])
+                try:
+                    with zipfile.ZipFile(combined, "w", zipfile.ZIP_DEFLATED) as z:
+                        for i, (zp, label) in enumerate(items, 1):
+                            z.write(zp, "%02d %s.zip" % (i, label))
+                        if missing:
+                            # 部分失败必须让用户看见：下载完的人不会去看服务端日志，
+                            # 就在包里放一份说明，写清哪几条没打进来、为什么可能没有。
+                            note = ("以下勾选的作品没有打进这个压缩包（目录缺失或已移入回收站）：\n\n"
+                                    + "\n".join("- " + x for x in missing)
+                                    + "\n\n其余 %d 条为完整 ZIP，解压后每条一个文件夹。" % len(items))
+                            z.writestr("说明-有%d条未打包.txt" % len(missing), note)
+                    return self._file(
+                        combined, name="作品库勾选%d条-%s.zip"
+                        % (len(items), time.strftime("%Y%m%d-%H%M%S")))
+                finally:
+                    try:
+                        os.remove(combined)
+                    except OSError:
+                        pass
+
             return self._json({"error": "bad path"}, 404)
         except BrokenPipeError:
             pass

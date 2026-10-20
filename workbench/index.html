@@ -1296,6 +1296,7 @@ html:not([data-theme="dark"]) .song-maker-replace:hover{color:#fffdf6;border-bot
       <button id="libNone" data-page-node-id="LibNoBZr8Wv3Tq6YnA8">清空选择</button>
       <span class="sp"></span>
       <span id="libSelHint" data-page-node-id="LibHintCZr8Wv3Tq6YnA9">已选 <b>0</b> 条</span>
+      <button class="btn" id="libZipSel" disabled data-page-node-id="LibZipEZr8Wv3Tq6YnAB">下载ZIP（0）</button>
       <button class="del" id="libDelSel" disabled data-page-node-id="LibDelDZr8Wv3Tq6YnAA">移入回收站（0）</button>
     </div>
     <div class="libbd" id="libbd" data-page-node-id="LibBd6Zr8Wv3Tq6YnA3"></div>
@@ -3004,18 +3005,23 @@ document.addEventListener('keydown', e=>{
 });
 
 /* ---------------- 下载 / 打开目录 ---------------- */
-function downloadZip(id){
+/* 图片格式选择弹窗（单曲 ZIP 与作品库批量 ZIP 共用）：
+   选完把格式交给 onPick，由调用方决定怎么下载。 */
+function zipFormatDialog(onPick){
   const dialog=document.createElement('dialog');
   dialog.style.cssText='margin:auto;padding:24px;border:1px solid #ddd;border-radius:14px;max-width:420px;width:90%';
   dialog.innerHTML=`<form method="dialog"><h3>下载图片格式</h3><p style="margin:12px 0">打印文件默认 JPG，PDF 也会保留。</p><select id="zipFormat" style="width:100%;padding:10px"><option value="jpg">JPG · 透明区域转为白底</option><option value="png">PNG · 保留透明背景</option><option value="original">原始格式 · 保留全部文件</option></select><p style="margin:12px 0;color:#667">此选项不影响打印文件：打印图片统一为 JPG，并保留 PDF。</p><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" value="cancel">取消</button><button class="btn" value="download">下载 ZIP</button></div></form>`;
   document.body.appendChild(dialog);dialog.showModal();
   dialog.addEventListener('close',()=>{
-    if(dialog.returnValue==='download'){
-      const a=document.createElement('a');
-      a.href=API+'/api/zip?id='+encodeURIComponent(id)+'&format='+dialog.querySelector('select').value;
-      document.body.appendChild(a);a.click();a.remove();toast('正在打包，稍等片刻');
-    }
+    if(dialog.returnValue==='download') onPick(dialog.querySelector('select').value);
     dialog.remove();
+  });
+}
+function downloadZip(id){
+  zipFormatDialog(fmt=>{
+    const a=document.createElement('a');
+    a.href=API+'/api/zip?id='+encodeURIComponent(id)+'&format='+fmt;
+    document.body.appendChild(a);a.click();a.remove();toast('正在打包，稍等片刻');
   });
 }
 $('#btnZip').onclick = ()=>{if(JOB) downloadZip(JOB);};
@@ -3224,6 +3230,8 @@ function libSelUI(){
   const btn = $('#libDelSel');
   btn.textContent = LIB_BUSY ? '正在移入…' : ('移入回收站（' + n + '）');
   btn.disabled = LIB_BUSY || n === 0;
+  const zb = $('#libZipSel');
+  if(zb){ zb.textContent = '下载ZIP（' + n + '）'; zb.disabled = n === 0; }
   const all = $('#libAll');
   all.disabled = !list.length;
   all.checked = n > 0 && n === list.length;
@@ -3293,6 +3301,24 @@ async function libDelSel(){
     LIB_BUSY = false;
     libSelUI();   // 抛错时选择集还在，计数必须照实恢复
   }
+}
+
+/* 批量下载 ZIP：把勾选的作品合并成一个大压缩包一次下走。
+   每条作品仍是各自完整的 ZIP（目录结构与单独下载一致），
+   条目名「序号 标题-id.zip」；迷你CD 直接用磁盘上现成的 zip。 */
+function libZipSel(){
+  const list = libFiltered().filter(j => LIB_SEL.has(libKey(j)));
+  if(!list.length){ toast('先勾选要下载的作品'); return; }
+  const ids  = list.map(j => j.id);
+  const cats = list.map(j => j.cat || 'work');
+  zipFormatDialog(fmt => {
+    const a = document.createElement('a');
+    a.href = API + '/api/jobs/zip?format=' + encodeURIComponent(fmt)
+      + '&ids='  + ids.map(encodeURIComponent).join(',')
+      + '&cats=' + cats.map(encodeURIComponent).join(',');
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('正在打包 ' + ids.length + ' 条作品，稍等片刻');
+  });
 }
 
 function libRow(j){
@@ -3455,6 +3481,7 @@ $('#libAll').addEventListener('change', e => libPickAll(e.target.checked));
 $('#libInv').onclick    = libPickInv;
 $('#libNone').onclick   = libPickNone;
 $('#libDelSel').onclick = libDelSel;
+$('#libZipSel').onclick = libZipSel;
 /* 行内勾选框走事件委托：列表每次都是整体重画的，逐行挂监听每次都得重挂一遍 */
 $('#libbd').addEventListener('change', e => {
   const t = e.target;
