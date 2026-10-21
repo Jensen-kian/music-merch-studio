@@ -2864,7 +2864,7 @@ class Handler(BaseHTTPRequestHandler):
                 opt = dict(DEFAULTS)
                 for k, v in req.items():
                     if k in DEFAULTS or k in ("artist", "song", "pick", "songId",
-                                              "songSource", "albummid", "coverUpload", "selectedSong",
+                                              "songSource", "albummid", "kugouAlbumId", "coverUpload", "selectedSong",
                                               "trackList"):
                         opt[k] = v
                 # 类型收敛, 防止前端传字符串把算术搞崩
