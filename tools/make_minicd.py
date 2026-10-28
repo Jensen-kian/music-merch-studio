@@ -419,8 +419,9 @@ def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
         顶部对齐；条带行各自独立以 1px 缝堆叠（行距 451px，实测如此）；
       · 两块之间缝隙 1px，行与行之间缝隙 1px —— 除此之外不留任何间隔；
       · 左右边距各 100px（8.5mm）、上边距 57px（4.8mm），内容整体居中；
-      · 黑色裁剪线：左块左右边缘各一条 1px 黑竖线，贯穿到页底；
-        页边留有首行顶线、末条封底条底线的水平延长线（对位用）；
+      · 裁剪线只画在空白处（2026-10-28 用户拍板）：外侧两缘走在页边距白区里，
+        左块右缘只在最后一行下方的空白延伸到底；**绝不能压到图片上**——
+        压图会被当成素材自带的黑边；
       · 折线与段线用浅灰点线（对折参考，不干扰裁切）。
     盘面不进这页（用 build_disc_page 单独出）。
     返回 page_im（RGB）。
@@ -454,22 +455,26 @@ def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
 
     x_right = x0 + fold_im.width + gap + strip_im.width      # 内容右缘
     y_last_strip = y0 + (n - 1) * (strip_im.height + gap) + strip_im.height
+    y_fold_bottom = y0 + (n - 1) * pitch + fold_im.height    # 左块最后一行底缘
 
-    # 黑色裁剪线：左块左右边缘各 1px，贯穿到页底（与手作版一致）
-    draw.line([x0, y0, x0, H - 1], fill=(0, 0, 0), width=1)
-    draw.line([x0 + fold_im.width - 2, y0, x0 + fold_im.width - 2, H - 1],
+    # 裁剪线只走空白区，绝不压图（压图的黑线会被当成素材黑边）：
+    #   · 左块左缘 / 内容右缘：整条竖线画在页边距白区里；
+    #   · 左块右缘：图片段不画，只从最后一行下方空白延伸到页底；
+    #   · 首行顶线与末行条带底线：只在左右页边距里留水平延长线。
+    draw.line([x0 - 2, y0 - 1, x0 - 2, y_fold_bottom], fill=(0, 0, 0), width=1)
+    draw.line([x0 + fold_im.width - 2, y_fold_bottom + 2, x0 + fold_im.width - 2, H - 1],
               fill=(0, 0, 0), width=1)
-    # 水平延长线（只在页边距里，不压图）：首行顶线 + 末行封底条底线
-    draw.line([0, y0 - 1, x0 - 1, y0 - 1], fill=(0, 0, 0), width=1)
-    draw.line([x_right + 1, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
-    draw.line([x_right + 1, y_last_strip - 1, W - 1, y_last_strip - 1],
+    draw.line([x_right + 1, y0 - 1, x_right + 1, y_last_strip], fill=(0, 0, 0), width=1)
+    draw.line([0, y0 - 1, x0 - 3, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right + 2, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right + 2, y_last_strip - 1, W - 1, y_last_strip - 1],
               fill=(0, 0, 0), width=1)
 
     # 顶部小字说明（放在 57px 上边距内，不占排版空间）
     f = _font(max(14, mm(2.0, dpi)))
     who = " · ".join([s for s in (artist, album) if s]) or "（未填歌手/专辑）"
     draw.text((x0, mm(1.0, dpi)),
-              "%s ｜ 实体专辑拼版 · 竖版 %d 套/页 ｜ %ddpi ｜ 缝隙即裁线（1px）· 黑线裁切·灰点线对折 ｜ "
+              "%s ｜ 实体专辑拼版 · 竖版 %d 套/页 ｜ %ddpi ｜ 缝隙即裁线（1px）· 灰点线对折 ｜ "
               "打印选「实际大小/100%%」，折件宽 = 82mm" % (who, n, dpi),
               font=f, fill=(130, 130, 130))
     return page_im
