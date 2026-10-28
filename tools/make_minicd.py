@@ -467,10 +467,11 @@ def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
     draw.line([x0, y_fold_bottom, x0, H - 1], fill=(0, 0, 0), width=1)
     draw.line([x0 + fold_im.width - 1, y_fold_bottom, x0 + fold_im.width - 1, H - 1],
               fill=(0, 0, 0), width=1)
-    draw.line([0, y0 - 1, x0 - 3, y0 - 1], fill=(0, 0, 0), width=1)
-    draw.line([x_right + 2, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
-    draw.line([x_right + 2, y_last_strip - 1, W - 1, y_last_strip - 1],
-              fill=(0, 0, 0), width=1)
+    # 水平延长线：与竖线同一标准 —— 与图片边缘相接（不悬空）、
+    # 端点对齐内容边缘（左端到封面左边缘前一列、右端从封底条右缘起）。
+    draw.line([0, y0 - 1, x0 - 1, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right, y_last_strip, W - 1, y_last_strip], fill=(0, 0, 0), width=1)
 
     # 顶部小字说明（放在 57px 上边距内，不占排版空间）
     f = _font(max(14, mm(2.0, dpi)))
