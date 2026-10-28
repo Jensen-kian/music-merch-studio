@@ -486,7 +486,7 @@ def build_job(data):
 
     # ---- 实体专辑素材拆件（用户素材库命名约定，2026-10-28 拍板）----
     # 封面折件 = [封面背面 | 封面]，封底条 = [右侧封|封底|左侧封|左侧封背面|内盘底]。
-    # 按段裁开存成 7 张独立 PNG，命名与 D:\BaiduNetdiskDownload\专辑\<歌手>\<专辑>\ 一致。
+    # 按段裁开存成 8 张独立 PNG，右侧封与左侧封各自导出，避免遗漏上传的素材。
     hw = fold.width // 2
     cover_front = fold.crop((fold.width - hw, 0, fold.width, fold.height))
     cover_back = fold.crop((0, 0, hw, fold.height))
@@ -496,12 +496,14 @@ def build_job(data):
     cuts[-1] = strip.width
     seg_right_spine = strip.crop((cuts[0], 0, cuts[1], strip.height))
     seg_back = strip.crop((cuts[1], 0, cuts[2], strip.height))
+    seg_left_spine = strip.crop((cuts[2], 0, cuts[3], strip.height))
     seg_spine_back = strip.crop((cuts[3], 0, cuts[4], strip.height))
     seg_tray = strip.crop((cuts[4], 0, cuts[5], strip.height))
     split_files = {
         "封面.png": cover_front,
         "封面背面.png": cover_back,
-        "左右侧封.png": seg_right_spine,
+        "右侧封.png": seg_right_spine,
+        "左侧封.png": seg_left_spine,
         "左侧封背面.png": seg_spine_back,
         "封底.png": seg_back,
         "内盘底.png": seg_tray,
@@ -566,8 +568,9 @@ def build_job(data):
     zip_path = OUT_DIR / ("%s.zip" % jid)
     _zip_members = ("★版面总览-1比1.png", "打印拼版-A4.png", "打印拼版-A4.pdf",
                     "打印拼版-A4竖版7套.png", "打印拼版-A4竖版7套.pdf",
-                    "封面.png", "封面背面.png", "左右侧封.png", "左侧封背面.png",
-                    "封底.png", "内盘底.png", "盘面.png")
+                    "盘面拼版-A4.png", "盘面拼版-A4.pdf",
+                    "封面.png", "封面背面.png", "右侧封.png", "左侧封.png",
+                    "左侧封背面.png", "封底.png", "内盘底.png", "盘面.png")
     with zipfile.ZipFile(str(zip_path), "w", zipfile.ZIP_DEFLATED) as z:
         for f in _zip_members:
             p = d / f
@@ -582,7 +585,8 @@ def build_job(data):
             # 磁盘上仍落盘 part-*.png，供作品库回看（PROJ_FILES）。
             {"name": "封面", "file": "封面.png", "mm": "%g×%g" % (SP.COVER_W / 2, SP.COVER_H)},
             {"name": "封面背面", "file": "封面背面.png", "mm": "%g×%g" % (SP.COVER_W / 2, SP.COVER_H)},
-            {"name": "左右侧封", "file": "左右侧封.png", "mm": "%g×%g" % (SP.BACK_SEGS[0], SP.BACK_H)},
+            {"name": "右侧封", "file": "右侧封.png", "mm": "%g×%g" % (SP.BACK_SEGS[0], SP.BACK_H)},
+            {"name": "左侧封", "file": "左侧封.png", "mm": "%g×%g" % (SP.BACK_SEGS[2], SP.BACK_H)},
             {"name": "左侧封背面", "file": "左侧封背面.png", "mm": "%g×%g" % (SP.BACK_SEGS[3], SP.BACK_H)},
             {"name": "封底", "file": "封底.png", "mm": "%g×%g" % (SP.BACK_SEGS[1], SP.BACK_H)},
             {"name": "内盘底", "file": "内盘底.png", "mm": "%g×%g" % (SP.BACK_SEGS[4], SP.BACK_H)},
