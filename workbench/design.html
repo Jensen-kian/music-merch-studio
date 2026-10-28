@@ -1141,9 +1141,7 @@ function renderDownloads(){
   const fu=(n)=>'/api/design/file?jid='+encodeURIComponent(LAST.jid)+'&name='+encodeURIComponent(n);
   const P=(SPEC&&SPEC.parts)||{};
   const rows=[
-    {ic:'PNG',t:'① 盘面',s:(LAST.mm.disc||(P.disc?('Ø'+P.disc.w+'mm'):''))+' · 300DPI',u:fu('part-disc.png')},
-    {ic:'PNG',t:'② 封面折件',s:(LAST.mm.cover||'')+' · 300DPI',u:fu('part-cover.png')},
-    {ic:'PNG',t:'③ 封底条',s:(LAST.mm.strip||'')+' · 300DPI',u:fu('part-strip.png')},
+    /* 旧三件套（盘面/封面折件/封底条）已移除：与素材拆件、拼版页重复 */
     {ic:'PNG',t:'1:1 版面总览',s:'含裁切/折线/尺寸标注/50mm 校验尺',u:fu('★版面总览-1比1.png')},
     {ic:'A4',t:'A4 竖版拼版 · 7套/页',s:'2480 × 3508 px（封面折件+封底条 · 无盘面）· 推荐',u:LAST.printUrl},
     {ic:'PDF',t:'竖版拼版 PDF',s:'与 PNG 同源，可直接送打印',u:LAST.printPdfUrl},

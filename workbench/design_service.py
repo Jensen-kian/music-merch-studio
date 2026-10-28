@@ -537,8 +537,7 @@ def build_job(data):
 
     # 打包 ZIP
     zip_path = OUT_DIR / ("%s.zip" % jid)
-    _zip_members = ("part-disc.png", "part-cover.png", "part-strip.png",
-                    "★版面总览-1比1.png", "打印拼版-A4.png", "打印拼版-A4.pdf",
+    _zip_members = ("★版面总览-1比1.png", "打印拼版-A4.png", "打印拼版-A4.pdf",
                     "打印拼版-A4竖版7套.png", "打印拼版-A4竖版7套.pdf",
                     "盘面拼版-A4.png", "盘面拼版-A4.pdf",
                     "封面.png", "封面背面.png", "左右侧封.png", "左侧封背面.png",
@@ -552,9 +551,9 @@ def build_job(data):
     return {
         "ok": True, "jid": jid,
         "parts": [
-            {"name": "盘面", "file": "part-disc.png", "mm": "%g×%g" % (SP.DISC_D, SP.DISC_D)},
-            {"name": "封面折件", "file": "part-cover.png", "mm": "%g×%g" % (SP.COVER_W, SP.COVER_H)},
-            {"name": "封底条", "file": "part-strip.png", "mm": "%g×%g" % (SP.BACK_W, SP.BACK_H)},
+            # 旧三件套（part-disc/part-cover/part-strip）已从导出清单移除：
+            # 与下面的素材拆件、两页拼版完全重复（2026-10-28 用户拍板）。
+            # 磁盘上仍落盘 part-*.png，供作品库回看（PROJ_FILES）。
             {"name": "封面", "file": "封面.png", "mm": "%g×%g" % (SP.COVER_W / 2, SP.COVER_H)},
             {"name": "封面背面", "file": "封面背面.png", "mm": "%g×%g" % (SP.COVER_W / 2, SP.COVER_H)},
             {"name": "左右侧封", "file": "左右侧封.png", "mm": "%g×%g" % (SP.BACK_SEGS[0], SP.BACK_H)},

@@ -411,51 +411,67 @@ def build_page(parts_meta, dpi, page="a4l", max_sets=0, artist="", album="",
 
 
 def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
-    """竖版 A4 一页 7 套：每行 = 封面折件(82×41) + 封底条(111.2×38)，无盘面。
+    """竖版 A4 一页 7 套：严格复刻用户手作 A4 的排版（实测范特西-A4.jpg）。
 
-    用户 2026-10-28 拍板的实体专辑排版（实测其手作 A4：竖版、7 行、
-    左封面对右封底条、盘面不进这页）。fold_im/strip_im 直接用
-    design_service.build_parts 的成品件，保证与三件套完全同源。
+    实测几何（300dpi，2480×3508）：
+      · 左块 = 封面+封面背面拼在一起的折件 82×41mm（968×484px），共 7 行；
+      · 右块 = 封底条整条 111.2×38mm（1313×449px），共 7 行，首行与左块
+        顶部对齐；条带行各自独立以 1px 缝堆叠（行距 451px，实测如此）；
+      · 两块之间缝隙 1px，行与行之间缝隙 1px —— 除此之外不留任何间隔；
+      · 左右边距各 100px（8.5mm）、上边距 57px（4.8mm），内容整体居中；
+      · 黑色裁剪线：左块左右边缘各一条 1px 黑竖线，贯穿到页底；
+        页边留有首行顶线、末条封底条底线的水平延长线（对位用）；
+      · 折线与段线用浅灰点线（对折参考，不干扰裁切）。
+    盘面不进这页（用 build_disc_page 单独出）。
     返回 page_im（RGB）。
     """
     W, H = mm(210.0, dpi), mm(297.0, dpi)
-    m = mm(5.0, dpi)
-    gap_x = mm(2.0, dpi)
+    gap = max(1, int(round(dpi / 300.0)))          # 用户约定：缝隙 = 1px@300dpi
+    x0 = max(gap, (W - (fold_im.width + gap + strip_im.width)) // 2)
+    y0 = max(gap, int(round(57.0 * dpi / 300.0)))  # 上边距 4.8mm，与手作版一致
+    pitch = fold_im.height + gap                   # 行距 = 件高 + 1px 缝
+
     page_im = Image.new("RGB", (W, H), "white")
     draw = ImageDraw.Draw(page_im)
 
     n = max(1, min(int(sets), 8))
-    fold_w, fold_h = fold_im.size
-    strip_w, strip_h = strip_im.size
-    pitch = (H - 2 * m) // n
-    total_w = fold_w + gap_x + strip_w
-    x0 = max(m, (W - total_w) // 2)
-    xf, xs = x0, x0 + fold_w + gap_x
-
-    seg_px = [mm(s, dpi) for s in BACK_SEGS]
     for i in range(n):
-        y = m + i * pitch
-        page_im.paste(fold_im, (xf, y))
-        ys = y + (fold_h - strip_h) // 2          # 条带在行内垂直居中
-        page_im.paste(strip_im, (xs, ys))
-        # 裁切框 + 折线（与 build_page 同风格：黑实线裁、灰线折）
-        draw.rectangle([xf, y, xf + fold_w - 1, y + fold_h - 1], outline=LINE, width=1)
-        draw.line([xf + fold_w // 2, y, xf + fold_w // 2, y + fold_h],
-                  fill=LINE_SOFT, width=1)
-        draw.rectangle([xs, ys, xs + strip_w - 1, ys + strip_h - 1], outline=LINE, width=1)
+        yf = y0 + i * pitch                          # 左块行距 = 折件高 + 1px
+        page_im.paste(fold_im, (x0, yf))             # 封面+背面拼件
+        # 右块独立堆叠：同样 1px 缝，仅首行与左块顶部对齐（实测手作版如此）
+        ys = y0 + i * (strip_im.height + gap)
+        page_im.paste(strip_im, (x0 + fold_im.width + gap, ys))
+        # 对折参考线（浅灰点线）：折件中线 + 封底条段界
+        fx = x0 + fold_im.width // 2
+        for yy in range(yf, yf + fold_im.height, 8):
+            draw.line([fx, yy, fx, min(yy + 4, yf + fold_im.height)], fill=(190, 190, 190))
         px = 0
-        for s in seg_px[:-1]:
-            px += s
-            if px < strip_w:
-                draw.line([xs + px, ys, xs + px, ys + strip_h], fill=LINE_SOFT, width=1)
+        for s in BACK_SEGS[:-1]:
+            px += mm(s, dpi)
+            sx = x0 + fold_im.width + gap + px
+            for yy in range(ys, ys + strip_im.height, 8):
+                draw.line([sx, yy, sx, min(yy + 4, ys + strip_im.height)], fill=(190, 190, 190))
 
-    # 顶部窄条说明（页边距只有 5mm，说明放页顶）
-    f = _font(max(16, mm(2.6, dpi)))
+    x_right = x0 + fold_im.width + gap + strip_im.width      # 内容右缘
+    y_last_strip = y0 + (n - 1) * (strip_im.height + gap) + strip_im.height
+
+    # 黑色裁剪线：左块左右边缘各 1px，贯穿到页底（与手作版一致）
+    draw.line([x0, y0, x0, H - 1], fill=(0, 0, 0), width=1)
+    draw.line([x0 + fold_im.width - 2, y0, x0 + fold_im.width - 2, H - 1],
+              fill=(0, 0, 0), width=1)
+    # 水平延长线（只在页边距里，不压图）：首行顶线 + 末行封底条底线
+    draw.line([0, y0 - 1, x0 - 1, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right + 1, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
+    draw.line([x_right + 1, y_last_strip - 1, W - 1, y_last_strip - 1],
+              fill=(0, 0, 0), width=1)
+
+    # 顶部小字说明（放在 57px 上边距内，不占排版空间）
+    f = _font(max(14, mm(2.0, dpi)))
     who = " · ".join([s for s in (artist, album) if s]) or "（未填歌手/专辑）"
-    draw.text((m, mm(1.2, dpi)),
-              "%s ｜ 实体专辑拼版 · 竖版 7 套/页 ｜ %ddpi ｜ 黑线裁切·灰线对折 ｜ "
-              "打印选「实际大小/100%%」，量对折件宽 = 82mm" % (who, dpi),
-              font=f, fill=(120, 120, 120))
+    draw.text((x0, mm(1.0, dpi)),
+              "%s ｜ 实体专辑拼版 · 竖版 %d 套/页 ｜ %ddpi ｜ 缝隙即裁线（1px）· 黑线裁切·灰点线对折 ｜ "
+              "打印选「实际大小/100%%」，折件宽 = 82mm" % (who, n, dpi),
+              font=f, fill=(130, 130, 130))
     return page_im
 
 
