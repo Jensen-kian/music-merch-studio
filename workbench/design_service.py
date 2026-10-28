@@ -6,14 +6,17 @@
 design_back2 / design_tray2）+ spec_minicd 尺寸真源，按 **111.2 固定结构** 出
 ①②③ 三件套 + 1:1 印刷版面总览；并导出打印文件（A4 300dpi PNG + PDF）+ ZIP。
 
-AI 增强走「程序衍生打底 + 可选上传覆盖」：build 接口接受 aiDisc/aiFold/aiStrip
-三个已上传图片路径（来自 /api/upload），给了就用它替代对应程序衍生件。
+AI 增强走「程序衍生打底 + 可选上传覆盖」：build 接口接受 aiDisc / aiCover /
+aiFold / aiBack / aiTray / aiSideR / aiSideL / aiSpine（八个可上传区域，
+来自 /api/upload），给了就原样替代对应程序衍生件；aiStrip（整条封底条
+展开图）仍兼容旧前端。上传件一律原样使用，不叠加程序文字/条码。
 
 接口契约同 packaging_service.handle（handler 为 server 的 BaseHTTPRequestHandler）：
   GET  /api/design/album   ?artist=&album=&pic=&tracks=&company=&mood=&style=
         → 拉封面 + 读设计语言 + 返回 notes（不落盘）
   POST /api/design/build   body{artist,album,pic,tracks,company,mood,style,id,
-                                aiDisc,aiFold,aiStrip}
+                                aiDisc,aiCover,aiFold,aiBack,aiTray,
+                                aiSideR,aiSideL,aiSpine,aiStrip(兼容)}
         → 出三件套 + 总览 + A4 打印页，存 outputs/迷你CD设计/<jid>/
         → 返回 {ok, jid, parts, sheetUrl, printUrl, notes, design, zipUrl}
   POST /api/design/batch   body{artist,albums:[{album,artist,pic,company,date}],
@@ -236,8 +239,19 @@ def _release_metadata(data, artist, album, company=""):
 
 def build_parts(cover, album, artist, D, tracks, company, ai=None, dpi=DPI,
                 inner_copy="", barcode_code="", copyright_text="", release_year="", back_layout="auto", copy_settings=None):
-    """出 ①②③ 三件（override-aware）。返回 (disc, fold, strip)。"""
+    """出 ①②③ 三件（override-aware）。返回 (disc, fold, strip)。
+    ai 可覆盖：disc 盘面 / cover 封面 / fold 封面背面 / backArt 封底 /
+    trayArt 内盘底 / sideR 右侧封 / sideL 左侧封 / spineBack 左侧封背面；
+    strip（整条封底条展开图）仍兼容旧前端。上传件一律原样使用不加程序字。
+    """
     MC._dpi[0] = dpi  # make_back_strip 用模块级 _dpi
+
+    # 上传的封面：归一到原封面尺寸后，作为全部衍生设计（盘面/封底/侧封延展）的画面源
+    if ai and ai.get("cover"):
+        try:
+            cover = MC.cover_crop(ai["cover"], cover.width, cover.height)
+        except Exception:
+            pass
 
     title_state = TT.title_typography_state(copy_settings or {}, D, album, artist)
     selected_title_asset = title_state.get("selectedTitleAssetId") if title_state.get("titleMode") == "artistic" else None
@@ -253,7 +267,7 @@ def build_parts(cover, album, artist, D, tracks, company, ai=None, dpi=DPI,
     hole_d = mm(SP.DISC_HOLE, dpi)
     if ai and ai.get("disc"):
         # 上传的盘面底图：裁到 Ø40 后套圆形遮罩 + 内孔（实体盘面照片也是这个处理）
-        disc = MS.disc_face(MC.cover_crop(ai["disc"], disc_d, disc_d), disc_d, hole_d)
+        disc = MC.disc_face(MC.cover_crop(ai["disc"], disc_d, disc_d), disc_d, hole_d)
     else:
         disc = DP.design_disc2((ai or {}).get("discArt") or cover, disc_d, hole_d, D, rendered_album, artist, company, copy_settings=copy_settings)
 
@@ -262,12 +276,14 @@ def build_parts(cover, album, artist, D, tracks, company, ai=None, dpi=DPI,
     fold_h = mm(SP.COVER_H, dpi)
     if ai and ai.get("fold"):
         inner_im = MC.cover_crop(ai["fold"], fold_w // 2, fold_h)
-        fold = MC.make_cover_fold(inner_im, cover, fold_w, fold_h, D, copy_settings)
+        fold = MC.make_cover_fold(inner_im, cover, fold_w, fold_h, D, copy_settings,
+                                  front_is_upload=bool(ai.get("cover")))
     else:
         inner_im = DP.design_inner2((ai or {}).get("insideArt") or cover, fold_w // 2, fold_h, D, rendered_album, artist,
                                     tracks, quote=(copy_settings or {}).get("conceptCopy", {}).get("primaryChinese") or inner_copy or None,
                                     copy_settings=copy_settings)
-        fold = MC.make_cover_fold(inner_im, cover, fold_w, fold_h, D, copy_settings)
+        fold = MC.make_cover_fold(inner_im, cover, fold_w, fold_h, D, copy_settings,
+                                  front_is_upload=bool(ai and ai.get("cover")))
 
     # ③ 封底条（封底 + 内盘底 + 侧封边缘延展）
     strip_w = mm(SP.BACK_W, dpi)
@@ -279,7 +295,10 @@ def build_parts(cover, album, artist, D, tracks, company, ai=None, dpi=DPI,
                                    artist, D, tracks, 0, company,
                                    barcode_code=barcode_code,
                                    copyright_text=copyright_text,
-                                   release_year=release_year, back_layout=back_layout, copy_settings=copy_settings)
+                                   release_year=release_year, back_layout=back_layout, copy_settings=copy_settings,
+                                   side_right_im=(ai or {}).get("sideR"),
+                                   side_left_im=(ai or {}).get("sideL"),
+                                   side_back_im=(ai or {}).get("spineBack"))
     if title_asset_image is not None:
         reports = {}
         disc, reports["disc"] = TC.place_title_asset(disc, title_asset_image, TC.resolve_title_placement("disc", SP), SP.title_protected_rects_mm("disc"), dpi)
@@ -377,10 +396,14 @@ def build_preview(data):
     copy_settings["resolvedLayout"] = CT.recommend_copy_layout(copy_settings, D)
     title_state = _title_state(data, D, album, artist, cover)
     ai = {"disc": _load_ai(data.get("aiDisc")),
+          "cover": _load_ai(data.get("aiCover")),
           "fold": _load_ai(data.get("aiFold")),
           "strip": _load_ai(data.get("aiStrip")),
           "backArt": _load_ai(data.get("aiBack")),
-          "trayArt": _load_ai(data.get("aiTray"))}
+          "trayArt": _load_ai(data.get("aiTray")),
+          "sideR": _load_ai(data.get("aiSideR")),
+          "sideL": _load_ai(data.get("aiSideL")),
+          "spineBack": _load_ai(data.get("aiSpine"))}
     requested_dpi = data.get("previewDpi", PREVIEW_DPI)
     try:
         preview_dpi = max(PREVIEW_DPI, min(DPI, int(requested_dpi)))
@@ -430,10 +453,14 @@ def build_job(data):
 
     ai = {
         "disc": _load_ai(data.get("aiDisc")),
+        "cover": _load_ai(data.get("aiCover")),
         "fold": _load_ai(data.get("aiFold")),
         "strip": _load_ai(data.get("aiStrip")),
         "backArt": _load_ai(data.get("aiBack")),
         "trayArt": _load_ai(data.get("aiTray")),
+        "sideR": _load_ai(data.get("aiSideR")),
+        "sideL": _load_ai(data.get("aiSideL")),
+        "spineBack": _load_ai(data.get("aiSpine")),
     }
     title_state = _title_state(data, D, album, artist, cover)
     has_ai = any(ai.values())
@@ -757,10 +784,14 @@ def build_batch(data):
             D = _read_design(cover, mood, style, bands)
 
             ai = {"disc": _load_ai(alb.get("aiDisc")),
+                  "cover": _load_ai(alb.get("aiCover")),
                   "fold": _load_ai(alb.get("aiFold")),
                   "strip": _load_ai(alb.get("aiStrip")),
                   "backArt": _load_ai(alb.get("aiBack")),
-                  "trayArt": _load_ai(alb.get("aiTray"))}
+                  "trayArt": _load_ai(alb.get("aiTray")),
+                  "sideR": _load_ai(alb.get("aiSideR")),
+                  "sideL": _load_ai(alb.get("aiSideL")),
+                  "spineBack": _load_ai(alb.get("aiSpine"))}
             has_ai = any(ai.values())
             disc, fold, strip = build_parts(cover, album, artist, D, tracks,
                                             company, ai if has_ai else None, DPI,

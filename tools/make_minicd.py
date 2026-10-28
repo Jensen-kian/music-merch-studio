@@ -160,13 +160,18 @@ def fb_back(cover_im, w, h, album, artist):
 
 
 # ---------------- 三大部件 ----------------
-def make_cover_fold(inner_im, cover_im, w_px, h_px, D=None, copy_settings=None):
-    """左内页 + 右封面，中间有对折线；正封面叠加真实字体短标签。"""
+def make_cover_fold(inner_im, cover_im, w_px, h_px, D=None, copy_settings=None,
+                    front_is_upload=False):
+    """左内页 + 右封面，中间有对折线；正封面叠加真实字体短标签。
+
+    front_is_upload：封面半边是用户上传的实拍/成品图时为 True —— 原样使用，
+    不再叠加程序短标签（2026-10-28 约定：上传过的面不加任何程序字）。
+    """
     half = w_px // 2
     out = Image.new("RGB", (w_px, h_px), "white")
     out.paste(cover_crop(inner_im, half, h_px), (0, 0))
     out.paste(cover_crop(cover_im, w_px - half, h_px), (half, 0))
-    if DP is not None and copy_settings:
+    if DP is not None and copy_settings and not front_is_upload:
         _primary, _secondary, short = DP._copy_text(copy_settings)
         tag = short or _secondary
         if tag:
@@ -211,12 +216,16 @@ def _solid_block(cover_im, w_px, h_px, album, artist):
 
 def make_back_strip(back_im, tray_im, w_px, h_px, cover_im, album, artist,
                     D=None, tracks=None, seed=0, company="", inner_copy="",
-                    barcode_code="", copyright_text="", release_year="", back_layout="auto", copy_settings=None):
+                    barcode_code="", copyright_text="", release_year="", back_layout="auto", copy_settings=None,
+                    side_right_im=None, side_left_im=None, side_back_im=None):
     """[右侧封][封底][左侧封][背脊][内盘底] 一条连续展开图。
 
     封底与内盘底缺件时走**封面衍生设计**（design_back / design_tray）；
     4mm 级侧封条从相邻段的边缘延展 —— 这样整条展开图色彩是连贯的，
     像一张真实印刷展开图，而不是几块拼贴。
+
+    side_right_im / side_left_im / side_back_im：右侧封 / 左侧封 / 左侧封背面
+    的用户上传图 —— 原样裁到段尺寸使用，不走边缘延展、不叠程序文字。
     """
     p = [mm(s, _dpi[0]) for s in BACK_SEGS]
     total = sum(p)
@@ -247,13 +256,25 @@ def make_back_strip(back_im, tray_im, w_px, h_px, cover_im, album, artist,
     # --- 三条窄封：画面都从相邻面板延展，文字职责各不相同 ---
     # 右侧封 = 外侧识别（标题＋歌手）；左侧封 = 封底与内盘底间的纯画面收边；
     # 左侧封背面 = 面向盒内的标题/短文案。这样不会出现三根一模一样的竖排文字。
-    right_spine = _edge_stretch(b, p[0], h_px)
-    left_spine = _edge_stretch(t, p[2], h_px)
-    left_spine_back = _edge_stretch(t, p[3], h_px)
-    if use_dp:
-        right_spine = DP.spine_overlay(right_spine, "right", album, artist, company, copy_settings)
-        left_spine = DP.spine_overlay(left_spine, "left", album, artist, company, copy_settings)
-        left_spine_back = DP.spine_overlay(left_spine_back, "left-back", album, artist, company, copy_settings)
+    # 上传过实拍图的段：原样使用（裁到段尺寸），不延展、不叠字。
+    if side_right_im is not None:
+        right_spine = cover_crop(side_right_im, p[0], h_px)
+    else:
+        right_spine = _edge_stretch(b, p[0], h_px)
+        if use_dp:
+            right_spine = DP.spine_overlay(right_spine, "right", album, artist, company, copy_settings)
+    if side_left_im is not None:
+        left_spine = cover_crop(side_left_im, p[2], h_px)
+    else:
+        left_spine = _edge_stretch(t, p[2], h_px)
+        if use_dp:
+            left_spine = DP.spine_overlay(left_spine, "left", album, artist, company, copy_settings)
+    if side_back_im is not None:
+        left_spine_back = cover_crop(side_back_im, p[3], h_px)
+    else:
+        left_spine_back = _edge_stretch(t, p[3], h_px)
+        if use_dp:
+            left_spine_back = DP.spine_overlay(left_spine_back, "left-back", album, artist, company, copy_settings)
     out.paste(right_spine, (0, 0))
     out.paste(left_spine, (p[0] + p[1], 0))
     out.paste(left_spine_back, (p[0] + p[1] + p[2], 0))
