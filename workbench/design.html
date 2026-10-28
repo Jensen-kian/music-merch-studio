@@ -280,8 +280,8 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
 .ribbonTabs{display:flex;flex-direction:row;align-items:center;gap:2px;padding:3px 2px;background:transparent;border-bottom:1px solid var(--line)}
 .ribbonTabs button{align-self:stretch;border:0;border-radius:5px;background:transparent;color:var(--muted);font:600 12px inherit;padding:3px 13px;white-space:nowrap;cursor:pointer}
 .ribbonTabs button:hover{background:#f1f5f1;color:var(--brand)}.ribbonTabs button.on{background:#eaf4ec;color:var(--brand)}
-/* “对象”工作区已包含资料确认和底图上传，移除重复入口。 */
-#btnProjectDataTab,#btnBackgroundTab{display:none}
+/* 底图上传入口在主栏 #aiCard（曾试过收进工具栏弹层，因入口不可见已废弃）。 */
+#btnProjectDataTab{display:none}
 .ribbonPanel{display:none;align-items:center;gap:0;min-width:0;padding:5px 12px;overflow-x:auto;overflow-y:hidden;background:transparent}.ribbonPanel.on{display:flex}.editorRibbon:has(.ribbonPanel[data-ribbon-panel="font"].on) .ribbonPanel,.editorRibbon:has(.ribbonPanel[data-ribbon-panel="layout"].on) .ribbonPanel{overflow-y:visible}
 .ribbonPanel::-webkit-scrollbar{height:4px}.ribbonPanel::-webkit-scrollbar-thumb{background:#d6ddd6;border-radius:4px}
 .editorRibbon .ribbonDock,.editorRibbon #spineEditorDock{align-self:stretch;flex:none;min-width:0;margin:0;padding:0 10px;border:0;border-right:1px solid #e2e6e1;background:transparent}
@@ -309,7 +309,7 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
     <button data-mod="export">导出</button>
   </nav>
   <div class="editorRibbon" id="editorRibbon" aria-label="设计工具栏">
-    <div class="ribbonTabs" role="tablist"><button type="button" class="on" data-ribbon-tab="side">侧封</button><button type="button" data-ribbon-tab="layout">排版</button><button type="button" data-ribbon-tab="font">字体</button><button type="button" data-ribbon-tab="object">对象</button><button type="button" data-ribbon-tab="view">预览</button><button type="button" id="btnProjectDataTab">资料</button><button type="button" id="btnStructureTab">结构</button><button type="button" id="btnRecentTab">最近</button><button type="button" id="btnBackgroundTab">底图</button></div>
+    <div class="ribbonTabs" role="tablist"><button type="button" class="on" data-ribbon-tab="side">侧封</button><button type="button" data-ribbon-tab="layout">排版</button><button type="button" data-ribbon-tab="font">字体</button><button type="button" data-ribbon-tab="object">对象</button><button type="button" data-ribbon-tab="view">预览</button><button type="button" id="btnProjectDataTab">资料</button><button type="button" id="btnStructureTab">结构</button><button type="button" id="btnRecentTab">最近</button></div>
     <div class="ribbonPanel" data-ribbon-panel="object"><div class="ribbonDock ribbonObjects"><b>编辑对象</b><div class="ribbonObjectButtons"><button type="button" data-canvas-part="disc">① 盘面</button><button type="button" data-canvas-part="booklet">② 封面</button><button type="button" data-canvas-part="sleeve">③ 封底条</button></div></div></div>
     <div class="ribbonPanel" data-ribbon-panel="layout"></div>
     <div class="ribbonPanel" data-ribbon-panel="font"></div>
@@ -679,22 +679,10 @@ function mountRailUtilityPopovers(){
   document.addEventListener('click',e=>{if(!e.target.closest('.railUtilityPopover')&&!e.target.closest('#btnStructureTab,#btnRecentTab'))document.querySelectorAll('.railUtilityPopover').forEach(x=>x.hidden=true);});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.railUtilityPopover').forEach(x=>x.hidden=true);});
 }
-function mountAssetPopover(){
-  const card=$('#aiCard'),button=$('#btnBackgroundTab');if(!card||!button)return;
-  const popover=document.createElement('section');popover.id='assetPopover';popover.className='assetPopover';popover.hidden=true;
-  popover.append(card);document.body.append(popover);
-  button.onclick=e=>{
-    const r=e.currentTarget.getBoundingClientRect(),width=Math.min(620,innerWidth-24);
-    popover.style.left=Math.max(12,Math.min(innerWidth-width-12,r.right-width))+'px';
-    popover.style.top=Math.max(12,Math.min(innerHeight-390,r.bottom+8))+'px';
-    popover.hidden=!popover.hidden;
-  };
-  document.addEventListener('click',e=>{if(!e.target.closest('#assetPopover')&&!e.target.closest('#btnBackgroundTab'))popover.hidden=true;});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')popover.hidden=true;});
-}
 mountProjectDataPopover();
 mountRailUtilityPopovers();
-mountAssetPopover();
+/* 底图上传卡片（#aiCard）保留在主栏「资料确认」下方 —— 2026-10-28 用户反馈找不到上传槽位：
+   mountAssetPopover 会把卡片挂进 #btnBackgroundTab 弹层，而该按钮被 CSS 隐藏，入口彻底消失。 */
 function dockPrimaryActions(){
   const editor=$('#spineEditorDock'),row=$('#dataCard .row2');
   if(!editor||!row||$('#ribbonActionDock'))return;
