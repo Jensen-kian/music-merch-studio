@@ -419,9 +419,10 @@ def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
         顶部对齐；条带行各自独立以 1px 缝堆叠（行距 451px，实测如此）；
       · 两块之间缝隙 1px，行与行之间缝隙 1px —— 除此之外不留任何间隔；
       · 左右边距各 100px（8.5mm）、上边距 57px（4.8mm），内容整体居中；
-      · 裁剪线只画在空白处（2026-10-28 用户拍板）：外侧两缘走在页边距白区里，
-        左块右缘只在最后一行下方的空白延伸到底；**绝不能压到图片上**——
-        压图会被当成素材自带的黑边；
+      · 裁剪线只画在空白处（2026-10-28 定稿）：页边距里不放贴图竖线；
+        最后一行图片下方的空白里，按封面左右边缘位置各留一条 1px 竖线
+        延伸到页底（顶端与图片底边相接）；页边留首行顶线、末行条带
+        底线的水平延长线（对位用）；
       · 折线与段线用浅灰点线（对折参考，不干扰裁切）。
     盘面不进这页（用 build_disc_page 单独出）。
     返回 page_im（RGB）。
@@ -457,14 +458,15 @@ def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
     y_last_strip = y0 + (n - 1) * (strip_im.height + gap) + strip_im.height
     y_fold_bottom = y0 + (n - 1) * pitch + fold_im.height    # 左块最后一行底缘
 
-    # 裁剪线只走空白区，绝不压图（压图的黑线会被当成素材黑边）：
-    #   · 左块左缘 / 内容右缘：整条竖线画在页边距白区里；
-    #   · 左块右缘：图片段不画，只从最后一行下方空白延伸到页底；
+    # 裁剪线只画空白处（2026-10-28 用户两轮反馈定稿）：
+    #   · 页边距里不再放贴着图片的竖线（会被看成素材黑边）；
+    #   · 只在最后一行图片下方的空白里，按封面左右边缘的位置各留一条
+    #     1px 竖线延伸到页底 —— 左缘对齐封面左边缘、右缘对齐封面右边缘，
+    #     顶端与图片底边相接（不悬空、不偏移）；
     #   · 首行顶线与末行条带底线：只在左右页边距里留水平延长线。
-    draw.line([x0 - 2, y0 - 1, x0 - 2, y_fold_bottom], fill=(0, 0, 0), width=1)
-    draw.line([x0 + fold_im.width - 2, y_fold_bottom + 2, x0 + fold_im.width - 2, H - 1],
+    draw.line([x0, y_fold_bottom, x0, H - 1], fill=(0, 0, 0), width=1)
+    draw.line([x0 + fold_im.width - 1, y_fold_bottom, x0 + fold_im.width - 1, H - 1],
               fill=(0, 0, 0), width=1)
-    draw.line([x_right + 1, y0 - 1, x_right + 1, y_last_strip], fill=(0, 0, 0), width=1)
     draw.line([0, y0 - 1, x0 - 3, y0 - 1], fill=(0, 0, 0), width=1)
     draw.line([x_right + 2, y0 - 1, W - 1, y0 - 1], fill=(0, 0, 0), width=1)
     draw.line([x_right + 2, y_last_strip - 1, W - 1, y_last_strip - 1],
