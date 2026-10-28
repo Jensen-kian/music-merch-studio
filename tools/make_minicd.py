@@ -410,6 +410,105 @@ def build_page(parts_meta, dpi, page="a4l", max_sets=0, artist="", album="",
     return page_im, sets, {"disc": disc, "cover": fold, "back": strip}
 
 
+def build_page_portrait7(fold_im, strip_im, dpi, artist="", album="", sets=7):
+    """竖版 A4 一页 7 套：每行 = 封面折件(82×41) + 封底条(111.2×38)，无盘面。
+
+    用户 2026-10-28 拍板的实体专辑排版（实测其手作 A4：竖版、7 行、
+    左封面对右封底条、盘面不进这页）。fold_im/strip_im 直接用
+    design_service.build_parts 的成品件，保证与三件套完全同源。
+    返回 page_im（RGB）。
+    """
+    W, H = mm(210.0, dpi), mm(297.0, dpi)
+    m = mm(5.0, dpi)
+    gap_x = mm(2.0, dpi)
+    page_im = Image.new("RGB", (W, H), "white")
+    draw = ImageDraw.Draw(page_im)
+
+    n = max(1, min(int(sets), 8))
+    fold_w, fold_h = fold_im.size
+    strip_w, strip_h = strip_im.size
+    pitch = (H - 2 * m) // n
+    total_w = fold_w + gap_x + strip_w
+    x0 = max(m, (W - total_w) // 2)
+    xf, xs = x0, x0 + fold_w + gap_x
+
+    seg_px = [mm(s, dpi) for s in BACK_SEGS]
+    for i in range(n):
+        y = m + i * pitch
+        page_im.paste(fold_im, (xf, y))
+        ys = y + (fold_h - strip_h) // 2          # 条带在行内垂直居中
+        page_im.paste(strip_im, (xs, ys))
+        # 裁切框 + 折线（与 build_page 同风格：黑实线裁、灰线折）
+        draw.rectangle([xf, y, xf + fold_w - 1, y + fold_h - 1], outline=LINE, width=1)
+        draw.line([xf + fold_w // 2, y, xf + fold_w // 2, y + fold_h],
+                  fill=LINE_SOFT, width=1)
+        draw.rectangle([xs, ys, xs + strip_w - 1, ys + strip_h - 1], outline=LINE, width=1)
+        px = 0
+        for s in seg_px[:-1]:
+            px += s
+            if px < strip_w:
+                draw.line([xs + px, ys, xs + px, ys + strip_h], fill=LINE_SOFT, width=1)
+
+    # 顶部窄条说明（页边距只有 5mm，说明放页顶）
+    f = _font(max(16, mm(2.6, dpi)))
+    who = " · ".join([s for s in (artist, album) if s]) or "（未填歌手/专辑）"
+    draw.text((m, mm(1.2, dpi)),
+              "%s ｜ 实体专辑拼版 · 竖版 7 套/页 ｜ %ddpi ｜ 黑线裁切·灰线对折 ｜ "
+              "打印选「实际大小/100%%」，量对折件宽 = 82mm" % (who, dpi),
+              font=f, fill=(120, 120, 120))
+    return page_im
+
+
+def build_disc_page(disc_im, dpi, artist="", album="", cols=4, rows=6):
+    """盘面单独页：A4 竖版密排 Ø40 圆盘（默认 4×6=24 个）。
+
+    用户排版约定：A4 拼版不放盘面，盘面用这页单独出。每个盘带裁切圆、
+    内孔参考圈与十字对位（同 build_page 的盘面标注风格）。返回 page_im。
+    """
+    W, H = mm(210.0, dpi), mm(297.0, dpi)
+    m = mm(10.0, dpi)
+    d_px = disc_im.size[0]
+    cols, rowsN = max(1, int(cols)), max(1, int(rows))
+    gap_x = (W - 2 * m - cols * d_px) // max(1, cols - 1) if cols > 1 else 0
+    gap_y = (H - 2 * m - rowsN * d_px) // max(1, rowsN - 1) if rowsN > 1 else 0
+
+    page_im = Image.new("RGB", (W, H), "white")
+    draw = ImageDraw.Draw(page_im)
+    mask = disc_im.split()[3] if disc_im.mode == "RGBA" else None
+    hole_r = mm(DISC_HOLE, dpi) // 2
+
+    for r in range(rowsN):
+        for c in range(cols):
+            x = m + c * (d_px + gap_x)
+            y = m + r * (d_px + gap_y)
+            page_im.paste(disc_im, (x, y), mask)
+            cx, cy = x + d_px // 2, y + d_px // 2
+            draw.ellipse([x, y, x + d_px - 1, y + d_px - 1], outline=LINE, width=2)
+            rr = hole_r + mm(1.2, dpi)
+            draw.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=LINE_SOFT, width=1)
+            draw.line([cx - 8, cy, cx + 8, cy], fill=LINE_SOFT, width=1)
+            draw.line([cx, cy - 8, cx, cy + 8], fill=LINE_SOFT, width=1)
+
+    f = _font(max(16, mm(2.6, dpi)))
+    who = " · ".join([s for s in (artist, album) if s]) or "（未填歌手/专辑）"
+    draw.text((m, mm(2.5, dpi)),
+              "%s ｜ 盘面拼版 · Ø%gmm（内孔 Ø%gmm 打穿） ｜ 本页 %d 个 ｜ %ddpi ｜ "
+              "打印选「实际大小/100%%」" % (who, DISC_D, DISC_HOLE, cols * rowsN, dpi),
+              font=f, fill=(120, 120, 120))
+    # 50mm 校验尺（右下角）
+    ruler_y = H - mm(6.0, dpi)
+    ruler_w = mm(50.0, dpi)
+    lw = max(3, mm(0.6, dpi))
+    rx = W - m - ruler_w
+    draw.line([rx, ruler_y, rx + ruler_w, ruler_y], fill=(0, 0, 0), width=lw)
+    for i in range(6):
+        tx = rx + mm(i * 10.0, dpi)
+        draw.line([tx, ruler_y - mm(2, dpi), tx, ruler_y + mm(2, dpi)],
+                  fill=(0, 0, 0), width=max(2, mm(0.4, dpi)))
+    draw.text((rx - mm(24, dpi), ruler_y - f.size // 2), "50mm", font=f, fill=(120, 120, 120))
+    return page_im
+
+
 # ---------------- 批量 ----------------
 def _safe_name(s):
     """文件名清洗：tag 会拼进路径，不清洗会被 NTFS 分隔符拆成子目录。"""
