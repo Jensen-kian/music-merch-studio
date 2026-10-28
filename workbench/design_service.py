@@ -242,7 +242,8 @@ def build_parts(cover, album, artist, D, tracks, company, ai=None, dpi=DPI,
     """出 ①②③ 三件（override-aware）。返回 (disc, fold, strip)。
     ai 可覆盖：disc 盘面 / cover 封面 / fold 封面背面 / backArt 封底 /
     trayArt 内盘底 / sideR 右侧封 / sideL 左侧封 / spineBack 左侧封背面；
-    strip（整条封底条展开图）仍兼容旧前端。上传件一律原样使用不加程序字。
+    strip（整条封底条展开图）仍兼容旧前端。上传件当底图，三条窄封的
+    侧封文字层照常叠加（文字/字体可在侧封工具栏自定义）。
     """
     MC._dpi[0] = dpi  # make_back_strip 用模块级 _dpi
 
