@@ -162,6 +162,26 @@ def _norm_tracks(v):
     return items or None
 
 
+def _album_tracks_by_id(raw):
+    """按专辑 id 向网易云要这张专辑**自己**的曲目。
+
+    批量批量入口（专辑墙勾选后「设计选中的 N 张」）只带了 id，没带 tracks。
+    这里补齐；取不到宁可返回 None（不印曲目），也不退回首歌手的歌单 ——
+    否则一张只有 1 首的单曲会被印上热门的若干首别人的歌（2026-10-30）。
+    """
+    aid = str(raw or "").strip()
+    if not aid.isdigit():
+        return None
+    try:
+        from fetch163 import album_songs as netease_album_songs
+        _info, songs = netease_album_songs(int(aid))
+    except Exception as e:
+        _slog("album tracks lookup failed:", aid, type(e).__name__, e)
+        return None
+    names = [str((s or {}).get("name") or "").strip() for s in (songs or [])]
+    return _norm_tracks([n for n in names if n][:10])
+
+
 def _parse_bands(v):
     """``safeBands`` → ``(top, bottom)``。
 
@@ -839,6 +859,9 @@ def build_batch(data):
             company, release_year, _release_date = _release_metadata(
                 alb, artist, album, str(alb.get("company") or company_all))
             tracks = _norm_tracks(alb.get("tracks"))
+            if not tracks:
+                # 专辑墙的批量只给了 id：按 id 取这张专辑自己的曲目。
+                tracks = _album_tracks_by_id(alb.get("id"))
             cover = _fetch_cover(alb.get("pic"))
             if cover is None:
                 raise ValueError("封面拉取失败")
