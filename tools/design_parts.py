@@ -1556,7 +1556,7 @@ def design_inner2(cover, w, h, D, album="", artist="", tracks=None, quote=None,
         base_image, cover, w, h, D, dict(fx=0.38, fy=0.31, zoom=1.72),
         dict(sat=g["sat"] * 0.86, bright=g["bright"] * 0.96, contrast=g["contrast"] * 1.04,
              tint=tuple(int(c * 0.55 + 26) for c in D.get("main", (90, 90, 90))), tint_k=0.22),
-        scrim_kw, elements, upload_scrim_kw=dict(bottom=0.34, top=0.30, power=1.5))
+        scrim_kw, elements, upload_scrim_kw=dict(bottom=0.16, top=0.14, power=1.5))
     d = ImageDraw.Draw(base)
     pad = max(4, int(w * 0.075))
     # 原本的白墨依赖上面的重压暗；换成用户自己的图后压暗变轻，浅色图会出现白字。

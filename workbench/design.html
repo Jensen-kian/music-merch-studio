@@ -386,7 +386,7 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
           </div>
           <div class="ribbonDock" id="spineTemplateDock"><label class="spineTemplateCurrent"><span class="srOnly">当前侧封模板文字</span><input id="spineTextEditor" class="input" maxlength="18" placeholder="点击修改当前模板文字" data-tooltip-title="当前侧封文字" data-tooltip-detail="最多18个字符；保持当前字号，并向下使用侧封可用区域。"></label></div>
           <details class="adv templateFields">
-            <summary>文案、字体与条码（自动生成，可选修改）</summary>
+            <summary>文案、字体与条码、版权声明（自动生成，可选修改）</summary>
             <div class="advancedBody">
             <div class="templateFieldTitle">固定模板内容 <span>这些字段会实时套入对应部件</span></div>
             <label class="field">内页文案（出现在 ② 左页）<textarea id="innerCopy" rows="2" maxlength="80" placeholder="例如：把平凡的日子，过成喜欢的样子。"></textarea></label>
@@ -1088,7 +1088,8 @@ const PART_KEY={aiDisc:'disc',aiCover:'cover',aiFold:'fold',aiBack:'back',aiTray
 const PART_ELEMENTS={
   aiDisc:[['albumTitle','专辑名'],['artist','歌手名'],['conceptTag','英文文案'],
           ['formatMark','「COMPACT DISC」标识'],['rings','内环与中心孔']],
-  aiFold:[['quote','中文金句'],['credit','歌手落款'],['conceptTag','英文文案'],['albumTitle','顶部小标题']],
+  aiFold:[['quote','中文金句'],['credit','歌手落款'],['conceptTag','英文文案'],['albumTitle','顶部小标题'],
+          ['scrim','画面压暗',false]],
   aiBack:[['albumTitle','专辑名'],['artist','歌手名'],['rule','细分隔线'],['tracks','曲目列表'],
           ['copyright','版权声明'],['conceptTag','英文文案'],['conceptQuote','中文金句'],
           ['barcode','条码'],['scrim','信息区压暗']],
@@ -1100,15 +1101,21 @@ const PART_ELEMENTS={
 };
 function elSummaryText(slot){
   const boxes=[...slot.querySelectorAll('.aiEls input[data-el]')];
-  const on=boxes.filter(c=>c.checked).length;
-  if(on===boxes.length)return '全部保留';
-  const offs=boxes.filter(c=>!c.checked).map(c=>c.nextElementSibling.textContent);
-  return on?('已去掉 '+offs.join('、')):'全部不保留';
+  // 只有「本来开着、被用户关掉」的才算去掉；本来就没开的项（如封面背面的压暗）
+  // 不算，否则一上传就显示「已去掉 XX」，让人以为是坏掉了。
+  const offs=boxes.filter(c=>!c.checked && c.dataset.def!=='0')
+                  .map(c=>c.nextElementSibling.textContent);
+  if(!offs.length)return '全部保留';
+  return '已去掉 '+offs.join('、');
 }
 function syncElSummary(slot){
   const box=slot.querySelector('.aiEls');if(!box)return;
   const b=box.querySelector('summary b');if(b)b.textContent=elSummaryText(slot);
   box.classList.toggle('off',![...box.querySelectorAll('input[data-el]')].some(c=>c.checked));
+}
+function resetElements(slot){
+  slot.querySelectorAll('.aiEls input[data-el]').forEach(cb=>{cb.checked=cb.dataset.def!=='0';});
+  syncElSummary(slot);
 }
 document.querySelectorAll('.aiSlot').forEach(slot=>{
   const spec=PART_ELEMENTS[slot.dataset.key];
@@ -1116,8 +1123,8 @@ document.querySelectorAll('.aiSlot').forEach(slot=>{
   const det=document.createElement('details');
   det.className='aiEls';
   det.innerHTML='<summary><b>全部保留</b><span>点开可逐项去掉（取消＝不印）</span></summary>'+
-    '<div class="elGrid">'+spec.map(([k,label])=>
-      `<label class="elRow"><input type="checkbox" data-el="${k}" checked><span>${label}</span></label>`).join('')+'</div>'+
+    '<div class="elGrid">'+spec.map(([k,label,on])=>
+      `<label class="elRow"><input type="checkbox" data-el="${k}" data-def="${on===false?'0':'1'}"${on===false?'':' checked'}><span>${label}</span></label>`).join('')+'</div>'+
     '<p class="note">若你上传的实拍图上已经印了曲目/条码，把同名项取消勾选，就不会重影。</p>';
   slot.appendChild(det);
   det.querySelectorAll('input[data-el]').forEach(cb=>cb.onchange=()=>{syncElSummary(slot);queuePreview();});
@@ -1149,13 +1156,14 @@ document.querySelectorAll('.aiSlot').forEach(slot=>{
       ai[key]=d.upload;slot.querySelector('.st').textContent='已上传 '+d.size+'（当底图用，文字层见下方）';
       slot.querySelector('.clr').hidden=false;
       const det=slot.querySelector('.aiEls');
-      if(det){det.open=true;slot.querySelectorAll('.aiEls input[data-el]').forEach(cb=>cb.checked=true);syncElSummary(slot);}
+      if(det){det.open=true;resetElements(slot);}
       queuePreview();
     }catch(e){slot.querySelector('.st').textContent='上传失败：'+e.message;slot.querySelector('.pv').hidden=true;}
   };
   slot.querySelector('.clr').onclick=()=>{
     ai[key]='';file.value='';slot.querySelector('.pv').hidden=true;
     slot.querySelector('.st').textContent='未上传';slot.querySelector('.clr').hidden=true;
+    if(slot.querySelector('.aiEls'))resetElements(slot);
     queuePreview();
   };
 });
