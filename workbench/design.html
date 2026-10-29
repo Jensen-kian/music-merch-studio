@@ -375,6 +375,7 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
           <label class="field">专辑名<input id="album" class="input"></label>
           <label class="field">歌手<input id="artist" class="input"></label>
           <label class="field">厂牌<input id="company" class="input" placeholder="抓取不到时自动填入 Good Life Music Co., Ltd."></label>
+          <label class="field">封底版权声明<input id="copyright" class="input" placeholder="留空自动生成：© 年份 + 厂牌名"><small class="muted">只改第一行归属；下面两行英文权利声明是印刷固定措辞，不接受改写</small></label>
           <label class="field">曲目列表（一行一首；按 Enter 换到下一首）<textarea id="tracks" rows="5" placeholder="曲名 01&#10;曲名 02&#10;曲名 03"></textarea></label>
           <div class="backLayoutField ribbonDock" id="backLayoutDock">
             <div class="templateFieldTitle">封底排版 <span id="backLayoutHint">自动会按曲目数和歌名长度推荐</span></div>
@@ -437,7 +438,6 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
             <div class="fieldGrid"><label class="field">英文概念副文案<input id="secondaryCopy" class="input" maxlength="64" placeholder="例如：STAY TRUE TO THE FEELING."><small class="muted">单列显示在右侧条码上方；双列固定拆成两行显示在左下、版权上方</small></label><label class="field">短英文标签<input id="shortTag" class="input" maxlength="36" placeholder="例如：A QUIET PLACE"></label></div>
             <div class="fieldGrid">
               <label class="field">条码编号（12 位数字，可选）<input id="barcode" class="input" inputmode="numeric" maxlength="13" placeholder="留空自动生成 EAN-13"><small id="barcodeHint" class="barcodeHint">留空时由程序自动生成 EAN-13</small></label>
-              <label class="field">封底版权区<input id="copyright" class="input" placeholder="留空自动生成：© 年份 + 厂牌名"><small class="muted">只改第一行归属，下面两行英文权利声明是印刷固定措辞，不接受改写</small></label>
             </div>
             </div>
           </details>
