@@ -293,8 +293,10 @@ body.embed .proj .t small{display:none}   /* 外层已有专辑名，这里不�
 .ribbonTabs{display:flex;flex-direction:row;align-items:center;gap:2px;padding:3px 2px;background:transparent;border-bottom:1px solid var(--line)}
 .ribbonTabs button{align-self:stretch;border:0;border-radius:5px;background:transparent;color:var(--muted);font:600 12px inherit;padding:3px 13px;white-space:nowrap;cursor:pointer}
 .ribbonTabs button:hover{background:#f1f5f1;color:var(--brand)}.ribbonTabs button.on{background:#eaf4ec;color:var(--brand)}
-/* 底图上传入口在主栏 #aiCard（曾试过收进工具栏弹层，因入口不可见已废弃）。 */
-#btnProjectDataTab{display:none}
+/* 数据确认卡片固定在主栏（曾试过收进工具栏弹层，因入口不可见已废弃）；
+   「资料」按钮只负责滚动定位到这张卡片，不再搬运 DOM。 */
+@keyframes flashCard{0%,100%{box-shadow:none}18%,62%{box-shadow:0 0 0 3px rgba(200,16,46,.30)}}
+.flashCard{animation:flashCard 1.4s ease-out}
 .ribbonPanel{display:none;align-items:center;gap:0;min-width:0;padding:5px 12px;overflow-x:auto;overflow-y:hidden;background:transparent}.ribbonPanel.on{display:flex}.editorRibbon:has(.ribbonPanel[data-ribbon-panel="font"].on) .ribbonPanel,.editorRibbon:has(.ribbonPanel[data-ribbon-panel="layout"].on) .ribbonPanel{overflow-y:visible}
 .ribbonPanel::-webkit-scrollbar{height:4px}.ribbonPanel::-webkit-scrollbar-thumb{background:#d6ddd6;border-radius:4px}
 .editorRibbon .ribbonDock,.editorRibbon #spineEditorDock{align-self:stretch;flex:none;min-width:0;margin:0;padding:0 10px;border:0;border-right:1px solid #e2e6e1;background:transparent}
@@ -663,21 +665,13 @@ $('#fontPickerList').onclick=e=>{const row=e.target.closest('[data-font-id]');if
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#fontPicker').hidden)closeFontPicker()});
 loadFontLibrary();
 dockSpineEditor();
-function mountProjectDataPopover(){
-  const card=$('#dataCard');if(!card||$('#projectDataPopover'))return;
-  const popover=document.createElement('section');popover.id='projectDataPopover';popover.className='projectDataPopover';popover.hidden=true;
-  popover.append(card);document.body.append(popover);
-  document.addEventListener('click',e=>{if(!e.target.closest('#projectDataPopover')&&!e.target.closest('[data-open-project-data],#btnProjectDataTab'))closeProjectDataPopover();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeProjectDataPopover();});
-}
-function closeProjectDataPopover(){const popover=$('#projectDataPopover');if(popover)popover.hidden=true;}
-function openProjectData(button){
-  const popover=$('#projectDataPopover');if(!popover)return;
-  const r=(button||$('#ribbonActionDock')).getBoundingClientRect(),width=470;
-  popover.style.left=Math.max(12,Math.min(innerWidth-width-12,r.right-width))+'px';
-  popover.style.top=Math.max(12,Math.min(innerHeight-420,r.bottom+8))+'px';
-  popover.hidden=false;
-}
+/* ------------------------------------------------------------------
+   数据确认卡片：永远留在主栏，不要搬进弹层。
+   2026-10-30 事故：mountProjectDataPopover() 在启动瞬间把 #dataCard 移进
+   <section hidden> 的浮层里，而唯一能打开它的 #btnProjectDataTab 当时又是
+   display:none —— 结果整张表单（专辑名/歌手/厂牌/封底版权声明/曲目）在页面上
+   彻底消失，用户怎么找都找不到。这里连同调用一起删除，恢复主栏直排。
+   ------------------------------------------------------------------ */
 function mountRailUtilityPopovers(){
   const utilities=[['railStructurePopover','.rail > .railDetails:not(#railProjBlk)','btnStructureTab'],['railRecentPopover','#railProjBlk','btnRecentTab']];
   utilities.forEach(([id,sourceSelector,buttonId])=>{
@@ -695,7 +689,6 @@ function mountRailUtilityPopovers(){
   document.addEventListener('click',e=>{if(!e.target.closest('.railUtilityPopover')&&!e.target.closest('#btnStructureTab,#btnRecentTab'))document.querySelectorAll('.railUtilityPopover').forEach(x=>x.hidden=true);});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.railUtilityPopover').forEach(x=>x.hidden=true);});
 }
-mountProjectDataPopover();
 mountRailUtilityPopovers();
 /* 底图上传卡片（#aiCard）保留在主栏「资料确认」下方 —— 2026-10-28 用户反馈找不到上传槽位：
    mountAssetPopover 会把卡片挂进 #btnBackgroundTab 弹层，而该按钮被 CSS 隐藏，入口彻底消失。 */
@@ -869,7 +862,12 @@ function stageHTML(){
 $('#cbGuides').onchange=e=>{document.body.classList.toggle('guides', e.target.checked);const ribbonGuide=$('#cbRibbonGuides');if(ribbonGuide)ribbonGuide.checked=e.target.checked;};
 $('#cbRibbonGuides').onchange=e=>{const guide=$('#cbGuides');guide.checked=e.target.checked;guide.dispatchEvent(new Event('change'));};
 $('#btnRibbonZoom').onclick=()=>openPreviewZoom();
-$('#btnProjectDataTab').onclick=e=>openProjectData(e.currentTarget);
+$('#btnProjectDataTab').onclick=e=>{
+  const card=$('#dataCard');if(!card)return;
+  card.scrollIntoView({behavior:'smooth',block:'start'});
+  card.classList.remove('flashCard');void card.offsetWidth;card.classList.add('flashCard');
+  setTimeout(()=>card.classList.remove('flashCard'),1400);
+};
 document.querySelectorAll('[data-canvas-part]').forEach(button=>button.onclick=()=>{const part=button.dataset.canvasPart;showMod('design');const row=document.querySelector('.stageRow[data-part="'+part+'"]');if(row)row.scrollIntoView({behavior:'smooth',block:'center'});document.querySelectorAll('[data-canvas-part]').forEach(x=>x.classList.toggle('on',x===button));});
 
 /* 编辑页默认保持三件套总览；点单件时请求与导出相同 300DPI 渲染，再在弹窗内缩放查看。 */
