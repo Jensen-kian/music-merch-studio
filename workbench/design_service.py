@@ -569,7 +569,7 @@ def build_job(data):
     zip_path = OUT_DIR / ("%s.zip" % jid)
     _zip_members = ("★版面总览-1比1.png", "打印拼版-A4.png", "打印拼版-A4.pdf",
                     "打印拼版-A4竖版7套.png", "打印拼版-A4竖版7套.pdf",
-                    "盘面拼版-A4.png", "盘面拼版-A4.pdf",
+                    # 盘面拼版不打包：用户拍板不要（文件仍在任务目录，作品库可回看）
                     "封面.png", "封面背面.png", "右侧封.png", "左侧封.png",
                     "左侧封背面.png", "封底.png", "内盘底.png", "盘面.png")
     with zipfile.ZipFile(str(zip_path), "w", zipfile.ZIP_DEFLATED) as z:
